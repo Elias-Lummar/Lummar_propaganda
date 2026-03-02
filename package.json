@@ -1,0 +1,37 @@
+{
+  "name": "sistema-propagandas",
+  "version": "1.0.0",
+  "description": "Sistema de apresentação de propagandas com Electron",
+  "main": "./public/js/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev"
+  },
+  "keywords": [
+    "electron",
+    "ads",
+    "presenter",
+    "digital-signage"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.3.3"
+  },
+  "dependencies": {
+    "bindings": "^1.5.0",
+    "cors": "^2.8.5",
+    "cross": "^1.0.0",
+    "cross-origin": "^1.0.6",
+    "express": "^5.2.1",
+    "fluent-ffmpeg": "^2.1.3",
+    "fs": "^0.0.1-security",
+    "multer": "^2.0.2",
+    "nosleep.js": "^0.12.0",
+    "path": "^0.12.7",
+    "router": "^2.2.0",
+    "sqlite3": "^5.1.7",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1"
+  }
+}
