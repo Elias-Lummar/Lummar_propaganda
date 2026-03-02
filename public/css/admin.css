@@ -1,0 +1,599 @@
+/* Aba ativa amarela com texto preto nas nav-tabs */
+.nav-tabs .nav-link.active {
+  background-color: #ffc107 !important;
+  color: #212529 !important;
+  border-color: #ffc107 #ffc107 #23272a;
+  font-weight: bold;
+}
+
+* {
+  color: #fff !important;
+}
+
+/* Botão Salvar Propaganda amarelo com texto preto */
+.btn.btn-primary[type="submit"] {
+  background-color: #ffc107 !important;
+  color: #212529 !important;
+  border: none;
+}
+.btn.btn-primary[type="submit"] * {
+  color: #212529 !important;
+}
+
+.navbar {
+  background-color: #ffc107 !important; /* amarelo - altere aqui se quiser outra cor */
+  color: #212529 !important; /* texto escuro */
+}
+.navbar .navbar-brand,
+.navbar .nav-link {
+  color: #212529 !important;
+}
+
+.navbar .navbar-brand,
+.navbar .nav-link {
+  color: #212529 !important; /* texto escuro para marca e links */
+}
+
+body {
+  background-color: #111213;
+  color: #f1f1f1;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.navbar-brand {
+  font-weight: bold;
+}
+
+.card {
+  border: none;
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.5);
+  border-radius: 0.5rem;
+  background-color: #23272a;
+  color: #f1f1f1;
+  margin: 1rem;
+}
+
+.card-header {
+  background-color: #23272a;
+  border-bottom: 1px solid #343a40;
+  font-weight: 600;
+  color: #fff;
+}
+
+.tab-content {
+  color: white;
+}
+
+tbody {
+  color: #ffffff !important;
+}
+
+.table th {
+  border-top: none;
+  font-weight: 600;
+  color: #fff !important;
+  background-color: #23272a !important;
+  color: #fff !important;
+  background-color: #23272a !important;
+}
+
+.badge {
+  font-size: 0.75em;
+}
+
+.btn-group-sm > .btn,
+.btn-sm {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+}
+
+/* File preview styles */
+.file-preview {
+  max-width: 100px;
+  max-height: 60px;
+  object-fit: cover;
+  border-radius: 0.25rem;
+}
+
+/* Status badges */
+.status-active {
+  background-color: #28a745;
+}
+
+.status-inactive {
+  background-color: #6c757d;
+}
+
+.status-scheduled {
+  background-color: #ffc107;
+  color: #212529;
+}
+
+.status-expired {
+  background-color: #dc3545;
+}
+
+/* Alert animations */
+.alert {
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Form enhancements */
+.form-control:focus,
+.form-select:focus {
+  border-color: #0d6efd;
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+/* Loading state */
+.loading-row {
+  text-align: center;
+  padding: 2rem;
+}
+
+.panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  text-align: center;
+  align-self: center;
+  align-content: center;
+}
+.panel label {
+  width: 80px;
+}
+.panel div {
+  display: flex;
+  justify-items: center;
+}
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .table-responsive {
+    font-size: 0.875rem;
+  }
+
+  .btn-group-vertical {
+    width: 100%;
+  }
+
+  .btn-group-vertical .btn {
+    margin-bottom: 0.25rem;
+  }
+}
+
+/* Custom file input */
+.form-control[type="file"] {
+  padding: 0.375rem 0.75rem;
+}
+
+/* Transition type indicators */
+.transition-indicator {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 0.5rem;
+}
+
+.transition-fade {
+  background-color: #007bff;
+}
+.transition-slide {
+  background-color: #28a745;
+}
+.transition-smoke {
+  background-color: #6f42c1;
+}
+.transition-blink {
+  background-color: #fd7e14;
+}
+
+.nav-tabs .nav-link.active {
+  background-color: #ffc107 !important;
+  color: #212529 !important;
+  border-color: #ffc107 #ffc107 #23272a;
+  font-weight: bold;
+}
+.panel-tabs-container {
+  background: #2c3e50;
+  padding: 0;
+  border-top: 1px solid #dee2e6;
+}
+
+.panel-tabs {
+  display: flex;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.tab-button {
+  flex: 1;
+  background: #34495e;
+  color: #ecf0f1;
+  border: none;
+  padding: 12px 20px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  border-right: 1px solid #2c3e50;
+  font-size: 14px;
+}
+
+.tab-button:last-child {
+  border-right: none;
+}
+
+.tab-button:hover {
+  background: #3d566e;
+  color: #fff;
+}
+
+.tab-button.active {
+  background: #f39c12;
+  color: #fff;
+  font-weight: 600;
+}
+
+.file-preview {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.status-active {
+  background-color: #28a745 !important;
+}
+
+.status-scheduled {
+  background-color: #17a2b8 !important;
+}
+
+.status-expired {
+  background-color: #6c757d !important;
+}
+
+.panel input[type="checkbox"] {
+  position: relative;
+  cursor: pointer;
+}
+
+.panel input[type="checkbox"]:before {
+  content: "";
+  display: block;
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  top: 0;
+  left: 0;
+  background-color: #6c757d;
+}
+
+.panel input[type="checkbox"]:checked:after {
+  content: "";
+  display: block;
+  width: 5px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 3px 3px 0;
+  -webkit-transform: rotate(45deg);
+  -ms-transform: rotate(45deg);
+  transform: rotate(45deg);
+  position: absolute;
+  top: 5px;
+  left: 9px;
+}
+
+/* ========================================================================
+   Drag-and-Drop Reordering - UX Melhorado
+   ======================================================================== */
+
+/* Handle de arrastar - mais visível e intuitivo */
+.drag-handle {
+  cursor: grab;
+  color: #6c757d !important;
+  font-size: 1.3rem;
+  text-align: center;
+  vertical-align: middle;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 50px !important;
+  padding: 12px 8px !important;
+  position: relative;
+}
+
+.drag-handle i {
+  transition: transform 0.3s ease;
+}
+
+.drag-handle:hover {
+  color: #ffc107 !important;
+  background-color: rgba(255, 193, 7, 0.1);
+  transform: scale(1.1);
+}
+
+.drag-handle:hover i {
+  transform: scale(1.2);
+  animation: grip-pulse 0.6s ease-in-out;
+}
+
+@keyframes grip-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+  color: #ff9800 !important;
+}
+
+/* Linha arrastável - feedback visual aprimorado */
+.draggable-row {
+  transition:
+    background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.25s ease,
+    transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.25s ease;
+  position: relative;
+  cursor: default;
+}
+
+.draggable-row:hover {
+  background-color: rgba(255, 193, 7, 0.08) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transform: translateX(2px);
+}
+
+.draggable-row:hover .drag-handle {
+  color: #ffc107 !important;
+}
+
+/* Linha sendo arrastada - ghost effect */
+.draggable-row.dragging {
+  opacity: 0.5;
+  background-color: #1a1d20 !important;
+  transform: scale(1.02) rotate(1deg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  border: 2px dashed #ffc107;
+}
+
+/* Indicadores visuais de drop - mais destacados */
+.draggable-row.drop-above {
+  border-top: 4px solid #ffc107 !important;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 193, 7, 0.2) 0%,
+    rgba(255, 193, 7, 0) 30%
+  ) !important;
+  box-shadow: 0 -2px 10px rgba(255, 193, 7, 0.3);
+}
+
+.draggable-row.drop-below {
+  border-bottom: 4px solid #ffc107 !important;
+  background: linear-gradient(
+    to top,
+    rgba(255, 193, 7, 0.2) 0%,
+    rgba(255, 193, 7, 0) 30%
+  ) !important;
+  box-shadow: 0 2px 10px rgba(255, 193, 7, 0.3);
+}
+
+/* Indicadores de posição - círculos pulsantes */
+.draggable-row.drop-above::before {
+  content: "▼";
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #ffc107;
+  font-size: 16px;
+  animation: drop-indicator-bounce 0.6s ease-in-out infinite;
+  text-shadow: 0 0 8px rgba(255, 193, 7, 0.8);
+  z-index: 10;
+}
+
+.draggable-row.drop-below::after {
+  content: "▲";
+  position: absolute;
+  bottom: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #ffc107;
+  font-size: 16px;
+  animation: drop-indicator-bounce 0.6s ease-in-out infinite;
+  text-shadow: 0 0 8px rgba(255, 193, 7, 0.8);
+  z-index: 10;
+}
+
+@keyframes drop-indicator-bounce {
+  0%,
+  100% {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+  50% {
+    transform: translateX(-50%) translateY(-3px);
+    opacity: 0.7;
+  }
+}
+
+/* Clone para touch drag - visual melhorado */
+.drag-clone {
+  background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%) !important;
+  border: 3px solid #ffc107;
+  border-radius: 8px;
+  box-shadow:
+    0 15px 40px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 193, 7, 0.3);
+  opacity: 0.95;
+  transform: scale(1.05) rotate(-2deg);
+}
+
+/* Ordem numérica visual durante drag */
+.draggable-row[data-drag-order]::after {
+  content: attr(data-drag-order);
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #ffc107;
+  color: #000;
+  font-weight: bold;
+  font-size: 0.9rem;
+  padding: 4px 10px;
+  border-radius: 20px;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+  z-index: 5;
+  animation: order-badge-appear 0.3s ease;
+}
+
+@keyframes order-badge-appear {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+}
+
+/* Botão salvar ordem - melhorado */
+#saveOrderBtn {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+#saveOrderBtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+}
+
+#saveOrderBtn.btn-pulse {
+  animation: pulse-save 1.5s ease-in-out infinite;
+  box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.6);
+}
+
+@keyframes pulse-save {
+  0% {
+    box-shadow:
+      0 0 0 0 rgba(40, 167, 69, 0.6),
+      0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+  50% {
+    box-shadow:
+      0 0 0 12px rgba(40, 167, 69, 0),
+      0 4px 12px rgba(40, 167, 69, 0.4);
+  }
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(40, 167, 69, 0),
+      0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+}
+
+/* Indicador de área de drop ativa */
+tbody.drag-active {
+  background-color: rgba(255, 193, 7, 0.05);
+  border: 2px dashed rgba(255, 193, 7, 0.3);
+  transition: all 0.3s ease;
+}
+
+/* Melhoria para touch feedback */
+.drag-handle:active::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 193, 7, 0.2);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  animation: touch-ripple 0.5s ease-out;
+}
+
+@keyframes touch-ripple {
+  to {
+    transform: translate(-50%, -50%) scale(2);
+    opacity: 0;
+  }
+}
+
+/* ========================================================================
+   Estilos de Paginação
+   ======================================================================== */
+
+/* Seletor de itens por página */
+#itemsPerPage {
+  background-color: #2c3e50;
+  border-color: #495057;
+  color: #fff !important;
+  transition: all 0.3s ease;
+}
+
+#itemsPerPage:hover {
+  border-color: #ffc107;
+  background-color: #34495e;
+}
+
+#itemsPerPage:focus {
+  border-color: #ffc107;
+  box-shadow: 0 0 0 0.2rem rgba(255, 193, 7, 0.25);
+  background-color: #34495e;
+}
+
+/* Informação da página */
+#pageInfo {
+  font-size: 0.9rem;
+  color: #adb5bd !important;
+}
+
+/* Controles de paginação */
+.pagination .page-link {
+  background-color: #2c3e50;
+  border-color: #495057;
+  color: #adb5bd !important;
+  transition: all 0.3s ease;
+}
+
+.pagination .page-link:hover {
+  background-color: #34495e;
+  border-color: #ffc107;
+  color: #ffc107 !important;
+}
+
+.pagination .page-item.active .page-link {
+  background-color: #ffc107;
+  border-color: #ffc107;
+  color: #000 !important;
+  font-weight: 600;
+}
+
+.pagination .page-item.disabled .page-link {
+  background-color: #23272a;
+  border-color: #495057;
+  color: #495057 !important;
+  opacity: 0.6;
+}

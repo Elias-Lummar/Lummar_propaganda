@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="https://public-frontend-cos.metadl.com/mgx/img/favicon.png"
+        type="image/png">
+    <title>Sistema de Gerenciamento de Propagandas</title>
+    <link rel="stylesheet" href="./style.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .welcome-container {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 3rem;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+            margin: 2rem;
+        }
+        .welcome-container h1 {
+            color: #333;
+            margin-bottom: 1rem;
+            font-size: 2.5rem;
+            font-weight: 300;
+        }
+        .welcome-container p {
+            color: #666;
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+        .btn-group {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .btn-secondary {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+        .features {
+            margin-top: 2rem;
+            text-align: left;
+        }
+        .features h3 {
+            color: #333;
+            margin-bottom: 1rem;
+        }
+        .features ul {
+            list-style: none;
+            padding: 0;
+        }
+        .features li {
+            padding: 0.5rem 0;
+            color: #666;
+        }
+        .features li:before {
+            content: "✓";
+            color: #28a745;
+            font-weight: bold;
+            margin-right: 0.5rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="welcome-container">
+        <h1>🎯 Sistema de Propagandas</h1>
+        <p>Gerencie e exiba suas propagandas de forma profissional com agendamento automático e efeitos de transição.</p>
+        
+        <div class="btn-group">
+            <a href="/admin" class="btn btn-primary">
+                <i class="fas fa-cog"></i>
+                Painel Administrativo
+            </a>
+            <a href="/presenter" class="btn btn-secondary" target="_blank">
+                <i class="fas fa-tv"></i>
+                Modo Apresentação
+            </a>
+        </div>
+
+        <div class="features">
+            <h3>Principais Funcionalidades:</h3>
+            <ul>
+                <li>Upload de imagens e vídeos</li>
+                <li>Agendamento automático por data/hora</li>
+                <li>4 efeitos de transição (fade, slide, smoke, blink)</li>
+                <li>Interface responsiva para administração</li>
+                <li>Modo tela cheia para TVs</li>
+                <li>Atualização automática das propagandas</li>
+            </ul>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/js/all.min.js"></script>
+    <script type="module" src="./script.js"></script>
+</body>
+
+</html>

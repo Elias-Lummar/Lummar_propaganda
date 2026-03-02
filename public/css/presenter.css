@@ -1,0 +1,743 @@
+/* Reset e estilos base */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  /* Previne scrollbars em TVs antigas */
+  -webkit-overflow-scrolling: auto;
+  -ms-overflow-style: none;
+}
+
+/* Container principal */
+#presenter-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Fallback para TVs sem flexbox */
+  display: -webkit-box;
+  -webkit-box-align: center;
+  -webkit-box-pack: center;
+  display: -ms-flexbox;
+  -ms-flex-align: center;
+  -ms-flex-pack: center;
+  display: flex;
+}
+
+/* Container de mídia */
+#media-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  /* Fallback para TVs sem flexbox */
+  display: -webkit-box;
+  -webkit-box-align: center;
+  -webkit-box-pack: center;
+  display: -ms-flexbox;
+  -ms-flex-align: center;
+  -ms-flex-pack: center;
+  display: flex;
+}
+
+/* ✅ Estilos para vídeos e imagens */
+.media-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  object-fit: contain; /* Mantém proporção sem cortar */
+  -o-object-fit: contain;
+  background: #000;
+  opacity: 0;
+  -webkit-transition: opacity 0.5s ease-in-out;
+  -moz-transition: opacity 0.5s ease-in-out;
+  -o-transition: opacity 0.5s ease-in-out;
+  -ms-transition: opacity 0.5s ease-in-out;
+  transition: opacity 0.5s ease-in-out;
+}
+
+.media-item.active {
+  opacity: 1;
+}
+
+/* Garantir que vídeos não tenham margem ou padding */
+video.media-item {
+  display: block;
+  max-width: 100%;
+  max-height: 100vh;
+}
+
+/* Garantir que imagens não tenham margem ou padding */
+img.media-item {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+/* Mensagem de sem propagandas */
+#no-ads-message {
+  display: none;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: #fff;
+  z-index: 10;
+}
+
+.no-ads-content {
+  padding: 2rem;
+}
+
+.no-ads-content i {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.no-ads-content h2 {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  font-weight: 300;
+}
+
+.no-ads-content p {
+  font-size: 1.2rem;
+  opacity: 0.7;
+}
+
+/* Loading indicator */
+#loading-indicator {
+  display: none;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  -webkit-transform: translate(-50%, -50%);
+  -moz-transform: translate(-50%, -50%);
+  -ms-transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: #fff;
+  z-index: 100;
+}
+
+.loading-spinner {
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-top: 4px solid #fff;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  -webkit-animation: spin 1s linear infinite;
+  -moz-animation: spin 1s linear infinite;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 1rem;
+}
+
+@-webkit-keyframes spin {
+  0% {
+    -webkit-transform: rotate(0deg);
+  }
+  100% {
+    -webkit-transform: rotate(360deg);
+  }
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Controles */
+#controls {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 15px 20px;
+  border-radius: 10px;
+  z-index: 1000;
+  transition: opacity 0.3s ease;
+}
+
+#controls button {
+  background: rgba(255, 255, 255, 0.9);
+  border: none;
+  padding: 10px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  transition: all 0.2s ease;
+  color: #000;
+}
+
+#controls button:hover {
+  background: #fff;
+  transform: scale(1.05);
+}
+
+#controls button:active {
+  transform: scale(0.95);
+}
+
+/* Barra de progresso */
+.progress-bar {
+  width: 200px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  transition: width 0.3s ease;
+  width: 0%;
+}
+
+/* Informações de tempo */
+.time-info {
+  color: #fff;
+  font-size: 14px;
+  font-weight: bold;
+  min-width: 60px;
+  text-align: center;
+}
+
+/* Mensagem de erro */
+.error-message {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: #fff;
+  background: rgba(255, 0, 0, 0.1);
+  padding: 2rem;
+  border-radius: 10px;
+  border: 2px solid rgba(255, 0, 0, 0.5);
+}
+
+.error-message h3 {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+  color: #ff4444;
+}
+
+.error-message p {
+  font-size: 1rem;
+  margin-bottom: 1rem;
+  opacity: 0.9;
+}
+
+.error-message button {
+  background: #ff4444;
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  transition: all 0.2s ease;
+}
+
+.error-message button:hover {
+  background: #ff6666;
+  transform: scale(1.05);
+}
+
+/* Responsivo */
+@media (max-width: 768px) {
+  #controls {
+    bottom: 10px;
+    padding: 10px 15px;
+    gap: 8px;
+  }
+
+  #controls button {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .progress-bar {
+    width: 100px;
+  }
+
+  .time-info {
+    font-size: 12px;
+    min-width: 50px;
+  }
+}
+
+/* Ocultar controles quando opacity = 0 */
+#controls[style*="opacity: 0"] {
+  pointer-events: none;
+}
+
+/* Tela cheia */
+:fullscreen #presenter-container,
+:-webkit-full-screen #presenter-container,
+:-moz-full-screen #presenter-container,
+:-ms-fullscreen #presenter-container {
+  width: 100vw;
+  height: 100vh;
+}
+
+/* ── Overlay de Inicialização ── */
+#electron-init-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(10, 10, 18, 0.92);
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-align: center;
+  -ms-flex-align: center;
+  align-items: center;
+  -webkit-box-pack: center;
+  -ms-flex-pack: center;
+  justify-content: center;
+  z-index: 10000;
+  -webkit-transition: opacity 0.5s ease;
+  -moz-transition: opacity 0.5s ease;
+  transition: opacity 0.5s ease;
+  cursor: default;
+}
+
+#electron-init-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Container interno */
+.overlay-content {
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-orient: vertical;
+  -webkit-box-direction: normal;
+  -ms-flex-direction: column;
+  flex-direction: column;
+  -webkit-box-align: center;
+  -ms-flex-align: center;
+  align-items: center;
+  gap: 32px;
+}
+
+/* Logo + título */
+.overlay-logo {
+  text-align: center;
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-orient: vertical;
+  -webkit-box-direction: normal;
+  -ms-flex-direction: column;
+  flex-direction: column;
+  -webkit-box-align: center;
+  -ms-flex-align: center;
+  align-items: center;
+  gap: 10px;
+}
+
+.overlay-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 1px;
+}
+
+.overlay-subtitle {
+  font-size: 14px;
+  color: #888;
+}
+
+/* Container dos botões lado a lado */
+.overlay-buttons {
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  gap: 20px;
+  -webkit-box-pack: center;
+  -ms-flex-pack: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* Botão base */
+.overlay-btn {
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-orient: vertical;
+  -webkit-box-direction: normal;
+  -ms-flex-direction: column;
+  flex-direction: column;
+  -webkit-box-align: center;
+  -ms-flex-align: center;
+  align-items: center;
+  gap: 14px;
+  background: linear-gradient(135deg, #1a1a28 0%, #24243a 100%);
+  border: 2px solid #333;
+  border-radius: 16px;
+  padding: 32px 40px;
+  min-width: 200px;
+  cursor: pointer;
+  -webkit-transition: all 0.25s ease;
+  -moz-transition: all 0.25s ease;
+  transition: all 0.25s ease;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  outline: none;
+  color: #fff;
+}
+
+.overlay-btn:hover {
+  -webkit-transform: scale(1.04);
+  -moz-transform: scale(1.04);
+  -ms-transform: scale(1.04);
+  transform: scale(1.04);
+}
+
+.overlay-btn:active {
+  -webkit-transform: scale(0.97);
+  -moz-transform: scale(0.97);
+  -ms-transform: scale(0.97);
+  transform: scale(0.97);
+}
+
+/* Ícone do botão */
+.overlay-btn .btn-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-align: center;
+  -ms-flex-align: center;
+  align-items: center;
+  -webkit-box-pack: center;
+  -ms-flex-pack: center;
+  justify-content: center;
+}
+
+.overlay-btn .btn-icon svg {
+  width: 28px;
+  height: 28px;
+}
+
+.overlay-btn .btn-title {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.overlay-btn .btn-subtitle {
+  font-size: 12px;
+  color: #777;
+  margin-top: -6px;
+}
+
+/* ── Botão Tela Cheia (azul) ── */
+.overlay-btn--fullscreen {
+  border-color: #5a6ef5;
+}
+
+.overlay-btn--fullscreen:hover {
+  background: linear-gradient(135deg, #222238 0%, #2e2e4a 100%);
+  border-color: #7b8fff;
+  -webkit-box-shadow: 0 0 28px rgba(90, 110, 245, 0.3);
+  box-shadow: 0 0 28px rgba(90, 110, 245, 0.3);
+}
+
+.overlay-btn--fullscreen .btn-icon {
+  background: rgba(90, 110, 245, 0.15);
+}
+
+.overlay-btn--fullscreen .btn-icon svg {
+  fill: #5a6ef5;
+}
+
+/* ── Botão Electron (verde) ── */
+.overlay-btn--electron {
+  border-color: #2e7d52;
+}
+
+.overlay-btn--electron:hover {
+  background: linear-gradient(135deg, #1a2822 0%, #223a2e 100%);
+  border-color: #3fad6e;
+  -webkit-box-shadow: 0 0 28px rgba(63, 173, 110, 0.3);
+  box-shadow: 0 0 28px rgba(63, 173, 110, 0.3);
+}
+
+.overlay-btn--electron .btn-icon {
+  background: rgba(46, 125, 82, 0.15);
+}
+
+.overlay-btn--electron .btn-icon svg {
+  fill: #3fad6e;
+}
+
+.overlay-btn--electron.loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* ── Botão Selecionar Apresentador (laranja/âmbar) ── */
+.overlay-btn--select {
+  border-color: #d4870e;
+}
+
+.overlay-btn--select:hover {
+  background: linear-gradient(135deg, #28221a 0%, #3a2e1a 100%);
+  border-color: #f5a623;
+  -webkit-box-shadow: 0 0 28px rgba(245, 166, 35, 0.3);
+  box-shadow: 0 0 28px rgba(245, 166, 35, 0.3);
+}
+
+.overlay-btn--select .btn-icon {
+  background: rgba(212, 135, 14, 0.15);
+}
+
+.overlay-btn--select .btn-icon svg {
+  width: 28px;
+  height: 28px;
+  stroke: #f5a623;
+  fill: none;
+}
+
+/* ── Presenter Picker ── */
+.presenter-picker {
+  display: none;
+  -webkit-box-orient: vertical;
+  -webkit-box-direction: normal;
+  -ms-flex-direction: column;
+  flex-direction: column;
+  -webkit-box-align: center;
+  -ms-flex-align: center;
+  align-items: center;
+  gap: 24px;
+  animation: pickerFadeIn 0.3s ease;
+}
+
+@keyframes pickerFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.picker-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+.picker-cards {
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  -webkit-box-pack: center;
+  -ms-flex-pack: center;
+  justify-content: center;
+  max-width: 700px;
+}
+
+.picker-card {
+  background: #1a1a22;
+  border: 2px solid #2a2a38;
+  border-radius: 14px;
+  padding: 20px 22px;
+  min-width: 120px;
+  text-align: center;
+  cursor: pointer;
+  -webkit-transition:
+    border-color 0.2s,
+    background 0.2s,
+    transform 0.15s;
+  transition:
+    border-color 0.2s,
+    background 0.2s,
+    transform 0.15s;
+  position: relative;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.picker-card:hover {
+  border-color: #5a6ef5;
+  background: #20203a;
+  -webkit-transform: translateY(-3px);
+  transform: translateY(-3px);
+}
+
+.picker-card:active {
+  -webkit-transform: scale(0.97);
+  transform: scale(0.97);
+}
+
+.picker-card--current {
+  border-color: #5a6ef5;
+  background: #1e1e38;
+  box-shadow: 0 0 20px rgba(90, 110, 245, 0.15);
+}
+
+.picker-card-icon {
+  font-size: 30px;
+  margin-bottom: 10px;
+  line-height: 1;
+}
+
+.picker-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0 0 4px 0;
+}
+
+.picker-card-desc {
+  font-size: 11px;
+  color: #777;
+  margin: 0;
+}
+
+.picker-badge {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  -webkit-transform: translateX(-50%);
+  transform: translateX(-50%);
+  background: #5a6ef5;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  padding: 2px 10px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.picker-current-tag {
+  position: absolute;
+  top: -10px;
+  right: 8px;
+  background: #2e7d52;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+}
+
+.picker-back {
+  background: none;
+  border: 1px solid #333;
+  color: #888;
+  border-radius: 8px;
+  padding: 8px 22px;
+  font-size: 13px;
+  cursor: pointer;
+  -webkit-transition:
+    border-color 0.2s,
+    color 0.2s;
+  transition:
+    border-color 0.2s,
+    color 0.2s;
+}
+
+.picker-back:hover {
+  border-color: #5a6ef5;
+  color: #aaa;
+}
+
+/* Status de lançamento */
+.overlay-status {
+  font-size: 13px;
+  min-height: 20px;
+  color: #888;
+  text-align: center;
+}
+
+.overlay-status.success {
+  color: #3fad6e;
+}
+
+.overlay-status.error {
+  color: #e55;
+}
+
+/* Responsivo */
+@media (max-width: 600px) {
+  .overlay-buttons {
+    -webkit-box-orient: vertical;
+    -webkit-box-direction: normal;
+    -ms-flex-direction: column;
+    flex-direction: column;
+  }
+
+  .overlay-btn {
+    min-width: 180px;
+    padding: 24px 32px;
+  }
+
+  .overlay-title {
+    font-size: 20px;
+  }
+}
+
+/* Cursor escondido após inatividade (opcional) */
+body.hide-cursor {
+  cursor: none;
+}
+
+body.hide-cursor * {
+  cursor: none !important;
+}
