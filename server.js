@@ -12,8 +12,8 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "1GB" }));
+app.use(express.urlencoded({ extended: true, limit: "1GB" }));
 app.use(express.static("public"));
 
 // Garantir diretório de uploads
@@ -33,7 +33,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 100 * 1024 * 1024 },
+  limits: { fileSize: 1 * 1024 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (
       file.mimetype.startsWith("image/") ||
@@ -159,37 +159,39 @@ app.post("/api/launch-electron", (req, res) => {
 
 // API - Ads
 app.get("/api/ads", (req, res) => {
-  const db = getDb();
-  db.all(
-    "SELECT * FROM ads ORDER BY display_order ASC, id DESC",
-    [],
-    (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json(
-        rows.map((r) => ({ ...r, screens: JSON.parse(r.screens || "[]") })),
-      );
-    },
-  );
+  try {
+    const db = getDb();
+    const rows = db
+      .prepare("SELECT * FROM ads ORDER BY display_order ASC, id DESC")
+      .all();
+    res.json(
+      rows.map((r) => ({ ...r, screens: JSON.parse(r.screens || "[]") })),
+    );
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get("/api/ads/active", (req, res) => {
-  const db = getDb();
-  const now = new Date().toISOString();
-  const panel = req.query.panel || "presenter";
+  try {
+    const db = getDb();
+    const now = new Date().toISOString();
+    const panel = req.query.panel || "presenter";
 
-  db.all(
-    "SELECT * FROM ads WHERE start_time <= ? AND end_time >= ? ORDER BY display_order ASC, id ASC",
-    [now, now],
-    (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
+    const rows = db
+      .prepare(
+        "SELECT * FROM ads WHERE start_time <= ? AND end_time >= ? ORDER BY display_order ASC, id ASC",
+      )
+      .all(now, now);
 
-      const ads = rows
-        .map((r) => ({ ...r, screens: JSON.parse(r.screens || "[]") }))
-        .filter((r) => r.screens.includes(panel));
+    const ads = rows
+      .map((r) => ({ ...r, screens: JSON.parse(r.screens || "[]") }))
+      .filter((r) => r.screens.includes(panel));
 
-      res.json(ads);
-    },
-  );
+    res.json(ads);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post("/api/ads", (req, res) => {
@@ -206,23 +208,25 @@ app.post("/api/ads", (req, res) => {
     return res.status(400).json({ error: "Selecione ao menos um painel" });
   }
 
-  const db = getDb();
-  db.run(
-    "INSERT INTO ads (title, file_path, start_time, end_time, transition_type, transition_duration, screens) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    [
-      title,
-      file_path,
-      start_time,
-      end_time,
-      transition_type,
-      transition_duration,
-      JSON.stringify(screens),
-    ],
-    function (err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ id: this.lastID });
-    },
-  );
+  try {
+    const db = getDb();
+    const info = db
+      .prepare(
+        "INSERT INTO ads (title, file_path, start_time, end_time, transition_type, transition_duration, screens) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        title,
+        file_path,
+        start_time,
+        end_time,
+        transition_type,
+        transition_duration,
+        JSON.stringify(screens),
+      );
+    res.json({ id: info.lastInsertRowid });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Reorder ads (drag-and-drop) — must come BEFORE /api/ads/:id
@@ -232,27 +236,17 @@ app.put("/api/ads/reorder", (req, res) => {
     return res.status(400).json({ error: "orders deve ser um array" });
   }
 
-  const db = getDb();
-  const stmt = db.prepare("UPDATE ads SET display_order = ? WHERE id = ?");
-  let errors = [];
-
-  db.serialize(() => {
-    db.run("BEGIN TRANSACTION");
-    for (let i = 0; i < orders.length; i++) {
-      stmt.run([orders[i].order, orders[i].id], (err) => {
-        if (err) errors.push(err.message);
-      });
-    }
-    stmt.finalize();
-    db.run("COMMIT", (err) => {
-      if (err || errors.length > 0) {
-        return res
-          .status(500)
-          .json({ error: errors.join(", ") || err.message });
-      }
-      res.json({ success: true, updated: orders.length });
+  try {
+    const db = getDb();
+    const stmt = db.prepare("UPDATE ads SET display_order = ? WHERE id = ?");
+    const updateAll = db.transaction((items) => {
+      for (const o of items) stmt.run(o.order, o.id);
     });
-  });
+    updateAll(orders);
+    res.json({ success: true, updated: orders.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.put("/api/ads/:id", (req, res) => {
@@ -269,10 +263,11 @@ app.put("/api/ads/:id", (req, res) => {
     return res.status(400).json({ error: "Selecione ao menos um painel" });
   }
 
-  const db = getDb();
-  db.run(
-    "UPDATE ads SET title=?, file_path=?, start_time=?, end_time=?, transition_type=?, transition_duration=?, screens=? WHERE id=?",
-    [
+  try {
+    const db = getDb();
+    db.prepare(
+      "UPDATE ads SET title=?, file_path=?, start_time=?, end_time=?, transition_type=?, transition_duration=?, screens=? WHERE id=?",
+    ).run(
       title,
       file_path,
       start_time,
@@ -281,30 +276,28 @@ app.put("/api/ads/:id", (req, res) => {
       transition_duration,
       JSON.stringify(screens),
       req.params.id,
-    ],
-    (err) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ success: true });
-    },
-  );
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.delete("/api/ads/:id", (req, res) => {
-  const db = getDb();
-  db.get(
-    "SELECT file_path FROM ads WHERE id=?",
-    [req.params.id],
-    (err, row) => {
-      if (row?.file_path) {
-        const file = path.join(__dirname, "public", row.file_path);
-        if (fs.existsSync(file)) fs.unlinkSync(file);
-      }
-
-      db.run("DELETE FROM ads WHERE id=?", [req.params.id], () =>
-        res.json({ success: true }),
-      );
-    },
-  );
+  try {
+    const db = getDb();
+    const row = db
+      .prepare("SELECT file_path FROM ads WHERE id=?")
+      .get(req.params.id);
+    if (row?.file_path) {
+      const file = path.join(__dirname, "public", row.file_path);
+      if (fs.existsSync(file)) fs.unlinkSync(file);
+    }
+    db.prepare("DELETE FROM ads WHERE id=?").run(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post("/api/upload", upload.single("file"), async (req, res) => {
@@ -318,6 +311,238 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
   }
 
   res.json({ file_path, video_duration: duration });
+});
+
+// ============================================================================
+// Deploy – Registro de Dispositivos & Envio do Instalador Electron
+// ============================================================================
+
+const registeredDevices = new Map(); // ip → objeto device
+const sseAgents = new Map(); // ip → SSE res (agentes conectados)
+const sseBuildClients = new Set(); // SSE res (admins acompanhando o build)
+
+function broadcastBuild(data) {
+  const msg = `data: ${JSON.stringify(data)}\n\n`;
+  sseBuildClients.forEach((r) => {
+    try {
+      r.write(msg);
+    } catch {}
+  });
+}
+
+function extractClientIP(req) {
+  const raw =
+    req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+    req.socket?.remoteAddress ||
+    "unknown";
+  return raw.replace("::ffff:", "");
+}
+
+// Página do agente (roda no dispositivo remoto)
+app.get("/agent", (req, res) =>
+  res.sendFile(path.join(__dirname, "public", "deploy-agent.html")),
+);
+
+// Retorna o IP de quem está fazendo a requisição e registra o device
+app.get("/api/client-ip", (req, res) => {
+  const ip = extractClientIP(req);
+  const existing = registeredDevices.get(ip) || {};
+  registeredDevices.set(ip, {
+    ...existing,
+    ip,
+    name: existing.name || `Dispositivo (${ip})`,
+    userAgent: req.headers["user-agent"] || "unknown",
+    lastSeen: new Date().toISOString(),
+    connected: sseAgents.has(ip),
+  });
+  res.json({ ip, registered: true });
+});
+
+// Lista dispositivos registrados
+app.get("/api/deploy/devices", (req, res) => {
+  const list = Array.from(registeredDevices.values()).map((d) => ({
+    ...d,
+    connected: sseAgents.has(d.ip),
+  }));
+  res.json(list);
+});
+
+// Remove dispositivo
+app.delete("/api/deploy/devices/:ip", (req, res) => {
+  registeredDevices.delete(req.params.ip);
+  res.json({ success: true });
+});
+
+// Renomeia dispositivo
+app.patch("/api/deploy/devices/:ip", (req, res) => {
+  const device = registeredDevices.get(req.params.ip);
+  if (!device)
+    return res.status(404).json({ error: "Dispositivo não encontrado" });
+  device.name = req.body.name || device.name;
+  res.json({ success: true });
+});
+
+// SSE – Agente remoto escuta comandos do servidor
+app.get("/api/deploy/listen", (req, res) => {
+  const ip = extractClientIP(req);
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+    "Access-Control-Allow-Origin": "*",
+  });
+
+  res.write(`data: ${JSON.stringify({ type: "connected", ip })}\n\n`);
+  sseAgents.set(ip, res);
+
+  const existing = registeredDevices.get(ip) || {};
+  registeredDevices.set(ip, {
+    ...existing,
+    ip,
+    name: existing.name || `Dispositivo (${ip})`,
+    userAgent: req.headers["user-agent"] || "unknown",
+    firstSeen: existing.firstSeen || new Date().toISOString(),
+    lastSeen: new Date().toISOString(),
+    connected: true,
+  });
+
+  const hb = setInterval(() => {
+    try {
+      res.write(`data: ${JSON.stringify({ type: "ping" })}\n\n`);
+    } catch {
+      clearInterval(hb);
+    }
+  }, 25000);
+
+  req.on("close", () => {
+    clearInterval(hb);
+    sseAgents.delete(ip);
+    const d = registeredDevices.get(ip);
+    if (d) registeredDevices.set(ip, { ...d, connected: false });
+  });
+});
+
+// SSE – Admin acompanha o log do build em tempo real
+app.get("/api/deploy/build-log", (req, res) => {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+  });
+  sseBuildClients.add(res);
+  req.on("close", () => sseBuildClients.delete(res));
+  res.write(`data: ${JSON.stringify({ type: "connected" })}\n\n`);
+});
+
+// Info sobre o instalador disponível
+app.get("/api/deploy/installer-info", (req, res) => {
+  const distDir = path.join(__dirname, "dist");
+  if (!fs.existsSync(distDir)) return res.json({ available: false });
+  const exts = [".exe", ".AppImage", ".dmg", ".deb", ".rpm"];
+  const files = fs
+    .readdirSync(distDir)
+    .filter((f) => exts.some((e) => f.endsWith(e)));
+  if (!files.length) return res.json({ available: false });
+
+  const latest = files
+    .map((f) => {
+      const s = fs.statSync(path.join(distDir, f));
+      return { name: f, size: s.size, builtAt: s.mtime.toISOString() };
+    })
+    .sort((a, b) => new Date(b.builtAt) - new Date(a.builtAt))[0];
+
+  res.json({ available: true, ...latest });
+});
+
+// Serve o instalador compilado para download
+app.get("/api/deploy/installer", (req, res) => {
+  const distDir = path.join(__dirname, "dist");
+  if (!fs.existsSync(distDir))
+    return res
+      .status(404)
+      .json({ error: "Pasta dist não encontrada. Execute o build primeiro." });
+
+  const files = fs.readdirSync(distDir).filter((f) => f.endsWith(".exe"));
+  if (!files.length)
+    return res
+      .status(404)
+      .json({ error: "Nenhum instalador .exe encontrado em /dist." });
+
+  const latest = files
+    .map((f) => ({ name: f, time: fs.statSync(path.join(distDir, f)).mtime }))
+    .sort((a, b) => b.time - a.time)[0];
+
+  res.download(path.join(distDir, latest.name), latest.name);
+});
+
+// Inicia o build via electron-builder
+let buildProc = null;
+app.post("/api/deploy/build", (req, res) => {
+  if (buildProc && !buildProc.killed)
+    return res.json({ success: false, message: "Build já está em andamento." });
+
+  const { spawn } = require("child_process");
+  const cwd = path.resolve(__dirname);
+
+  buildProc = spawn("npx", ["electron-builder", "--win", "--x64"], {
+    cwd,
+    shell: true,
+  });
+
+  res.json({ success: true, message: "Build iniciado." });
+  broadcastBuild({ type: "start" });
+
+  buildProc.stdout?.on("data", (d) =>
+    broadcastBuild({ type: "log", level: "info", text: d.toString() }),
+  );
+  buildProc.stderr?.on("data", (d) =>
+    broadcastBuild({ type: "log", level: "warn", text: d.toString() }),
+  );
+  buildProc.on("exit", (code) => {
+    buildProc = null;
+    broadcastBuild({ type: "done", code, success: code === 0 });
+  });
+  buildProc.on("error", (err) => {
+    buildProc = null;
+    broadcastBuild({ type: "error", message: err.message });
+  });
+});
+
+// Empurra o link do instalador para um IP específico ou para todos os agentes
+app.post("/api/deploy/push", (req, res) => {
+  const { ip, mode } = req.body; // mode: "single" | "all"
+  const localIP = getLocalIPAddress();
+  const url = `http://${localIP}:${PORT}/api/deploy/installer`;
+  const msg = `data: ${JSON.stringify({ type: "install", url, serverIp: localIP })}\n\n`;
+
+  if (mode === "all") {
+    let sent = 0;
+    sseAgents.forEach((client) => {
+      try {
+        client.write(msg);
+        sent++;
+      } catch {}
+    });
+    return res.json({
+      success: true,
+      sent,
+      message: `Enviado para ${sent} dispositivo(s).`,
+    });
+  }
+
+  if (!ip) return res.status(400).json({ error: "Informe o IP." });
+  const client = sseAgents.get(ip);
+  if (!client)
+    return res
+      .status(404)
+      .json({ error: `Dispositivo ${ip} não está conectado como agente.` });
+
+  try {
+    client.write(msg);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Errors

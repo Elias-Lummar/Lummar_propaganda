@@ -270,7 +270,9 @@ var MediaFactory = (function () {
         var clone = element.cloneNode(false);
         if (element.parentNode) {
           element.parentNode.replaceChild(clone, element);
-          clone.remove();
+          if (clone.parentNode) {
+            clone.parentNode.removeChild(clone);
+          }
         }
       } else {
         // Imagem: remove do DOM

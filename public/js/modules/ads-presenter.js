@@ -907,77 +907,80 @@
     if (btnSelect && pickerEl && pickerCards) {
       // Gera os cards do picker
       pickerCards.innerHTML = "";
-      PRESENTERS.forEach(function (p) {
-        var card = document.createElement("div");
-        card.className = "picker-card";
+      for (var _pi = 0; _pi < PRESENTERS.length; _pi++) {
+        (function (p) {
+          var card = document.createElement("div");
+          card.className = "picker-card";
 
-        var badgeHtml = p.badge
-          ? '<div class="picker-badge">' + p.badge + "</div>"
-          : "";
+          var badgeHtml = p.badge
+            ? '<div class="picker-badge">' + p.badge + "</div>"
+            : "";
 
-        card.innerHTML =
-          badgeHtml +
-          '<div class="picker-card-icon">' +
-          p.icon +
-          "</div>" +
-          '<h3 class="picker-card-title">' +
-          p.label +
-          "</h3>" +
-          '<p class="picker-card-desc">' +
-          p.desc +
-          "</p>";
+          card.innerHTML =
+            badgeHtml +
+            '<div class="picker-card-icon">' +
+            p.icon +
+            "</div>" +
+            '<h3 class="picker-card-title">' +
+            p.label +
+            "</h3>" +
+            '<p class="picker-card-desc">' +
+            p.desc +
+            "</p>";
 
-        card.addEventListener("click", function () {
-          console.log(LOG_PREFIX + " 🖥️ Lançando Electron com: " + p.label);
+          card.addEventListener("click", function () {
+            console.log(LOG_PREFIX + " 🖥️ Lançando Electron com: " + p.label);
 
-          if (statusEl) {
-            statusEl.textContent = "Iniciando Electron com " + p.label + "...";
-            statusEl.className = "overlay-status";
-          }
+            if (statusEl) {
+              statusEl.textContent =
+                "Iniciando Electron com " + p.label + "...";
+              statusEl.className = "overlay-status";
+            }
 
-          // Chama a API para lançar o Electron com o presenter escolhido
-          var apiUrl =
-            (CONFIG.apiHost || detectApiHost()) + "/api/launch-electron";
+            // Chama a API para lançar o Electron com o presenter escolhido
+            var apiUrl =
+              (CONFIG.apiHost || detectApiHost()) + "/api/launch-electron";
 
-          xhrPost(
-            apiUrl,
-            { presenter: p.file },
-            10000,
-            function (data) {
-              if (data && data.success) {
-                if (statusEl) {
-                  statusEl.textContent =
-                    "✓ Electron aberto com " +
-                    p.label +
-                    "! Pode fechar esta aba.";
-                  statusEl.className = "overlay-status success";
+            xhrPost(
+              apiUrl,
+              { presenter: p.file },
+              10000,
+              function (data) {
+                if (data && data.success) {
+                  if (statusEl) {
+                    statusEl.textContent =
+                      "✓ Electron aberto com " +
+                      p.label +
+                      "! Pode fechar esta aba.";
+                    statusEl.className = "overlay-status success";
+                  }
+                  console.log(
+                    LOG_PREFIX + " ✓ Electron lançado (PID: " + data.pid + ")",
+                  );
+                } else {
+                  var msg =
+                    data && data.message ? data.message : "Erro desconhecido";
+                  if (statusEl) {
+                    statusEl.textContent = msg;
+                    statusEl.className = "overlay-status error";
+                  }
                 }
-                console.log(
-                  LOG_PREFIX + " ✓ Electron lançado (PID: " + data.pid + ")",
-                );
-              } else {
-                var msg =
-                  data && data.message ? data.message : "Erro desconhecido";
+              },
+              function (errorMsg) {
                 if (statusEl) {
-                  statusEl.textContent = msg;
+                  statusEl.textContent = "Erro: " + errorMsg;
                   statusEl.className = "overlay-status error";
                 }
-              }
-            },
-            function (errorMsg) {
-              if (statusEl) {
-                statusEl.textContent = "Erro: " + errorMsg;
-                statusEl.className = "overlay-status error";
-              }
-              console.error(
-                LOG_PREFIX + " ❌ Erro ao lançar Electron: " + errorMsg,
-              );
-            },
-          );
-        });
+                console.error(
+                  LOG_PREFIX + " ❌ Erro ao lançar Electron: " + errorMsg,
+                );
+              },
+            );
+          });
 
-        pickerCards.appendChild(card);
-      });
+          pickerCards.appendChild(card);
+        })(PRESENTERS[_pi]);
+      }
 
       // Botão para abrir o seletor
       btnSelect.onclick = function () {
@@ -1000,8 +1003,10 @@
     }
 
     // ── Auto-start: se veio com ?autostart=1, entra em fullscreen automaticamente ──
-    var urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get("autostart") === "1") {
+    // Parser manual de query string (ES5 compatível — sem URLSearchParams)
+    var _search = window.location.search || "";
+    var _hasAutostart = _search.indexOf("autostart=1") !== -1;
+    if (_hasAutostart) {
       console.log(
         LOG_PREFIX + " ▶️ Auto-start detectado – entrando em tela cheia",
       );

@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agente de Deploy – Lummar Propaganda</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: "Segoe UI", sans-serif;
+        background: #0d0f14;
+        color: #e0e0e0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 24px;
+        padding: 24px;
+      }
+
+      .logo {
+        font-size: 2rem;
+        letter-spacing: 2px;
+        font-weight: 700;
+        color: #5a6ef5;
+      }
+
+      .card {
+        background: #181b26;
+        border: 1px solid #2a2d3e;
+        border-radius: 16px;
+        padding: 32px 36px;
+        width: 100%;
+        max-width: 520px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .card-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      /* Status badge */
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        padding: 4px 12px;
+        border-radius: 20px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .badge.disconnected {
+        background: #2a1a1a;
+        color: #e05555;
+        border: 1px solid #5a2222;
+      }
+      .badge.connecting {
+        background: #1a1e2a;
+        color: #a0a8e0;
+        border: 1px solid #3a3e6a;
+      }
+      .badge.connected {
+        background: #0e2218;
+        color: #3fad6e;
+        border: 1px solid #1e5a3e;
+      }
+
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+      .dot.pulse {
+        animation: pulse 1.5s infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.4;
+          transform: scale(0.7);
+        }
+      }
+
+      /* Info rows */
+      .info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.875rem;
+        padding: 6px 0;
+        border-bottom: 1px solid #1e2030;
+      }
+      .info-row:last-child {
+        border-bottom: none;
+      }
+      .info-label {
+        color: #666;
+      }
+      .info-value {
+        color: #ccc;
+        font-family: monospace;
+      }
+
+      /* Log */
+      #logBox {
+        background: #0a0c12;
+        border: 1px solid #1e2030;
+        border-radius: 8px;
+        padding: 12px;
+        font-family: monospace;
+        font-size: 0.8rem;
+        height: 160px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .log-entry {
+        line-height: 1.5;
+      }
+      .log-entry.info {
+        color: #8888cc;
+      }
+      .log-entry.ok {
+        color: #3fad6e;
+      }
+      .log-entry.warn {
+        color: #e0a040;
+      }
+      .log-entry.error {
+        color: #e05555;
+      }
+
+      /* Download area */
+      #downloadArea {
+        display: none;
+        flex-direction: column;
+        gap: 14px;
+        background: #0e2218;
+        border: 1px solid #1e5a3e;
+        border-radius: 12px;
+        padding: 20px;
+        animation: fadeIn 0.4s ease;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      #downloadArea h3 {
+        font-size: 1rem;
+        color: #3fad6e;
+      }
+      #downloadArea p {
+        font-size: 0.85rem;
+        color: #aaa;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 22px;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        transition:
+          opacity 0.2s,
+          transform 0.1s;
+        text-decoration: none;
+      }
+      .btn:active {
+        transform: scale(0.97);
+      }
+      .btn-primary {
+        background: #5a6ef5;
+        color: #fff;
+      }
+      .btn-primary:hover {
+        opacity: 0.85;
+      }
+      .btn-success {
+        background: #3fad6e;
+        color: #fff;
+      }
+      .btn-success:hover {
+        opacity: 0.85;
+      }
+
+      .steps {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 0.85rem;
+        color: #aaa;
+        padding-left: 0;
+      }
+      .steps li::before {
+        content: attr(data-step) ". ";
+        color: #3fad6e;
+        font-weight: 700;
+      }
+
+      footer {
+        font-size: 0.75rem;
+        color: #444;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="logo">📡 Lummar Deploy Agent</div>
+
+    <div class="card">
+      <div class="card-title">
+        Status da Conexão
+        <span id="badge" class="badge connecting">
+          <span class="dot pulse"></span>
+          Conectando…
+        </span>
+      </div>
+
+      <div id="infoRows">
+        <div class="info-row">
+          <span class="info-label">Meu IP</span>
+          <span class="info-value" id="myIp">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Servidor</span>
+          <span class="info-value" id="serverAddr">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Última atividade</span>
+          <span class="info-value" id="lastActivity">—</span>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size: 0.8rem; color: #555; margin-bottom: 6px">
+          Log de eventos
+        </div>
+        <div id="logBox"></div>
+      </div>
+    </div>
+
+    <!-- Área de download — aparece quando o servidor manda um push -->
+    <div id="downloadArea" class="card">
+      <h3>📥 Instalador recebido!</h3>
+      <p>
+        O servidor enviou um novo instalador do Electron. Clique abaixo para
+        baixar e execute o arquivo para instalar o aplicativo nesta máquina.
+      </p>
+
+      <a id="downloadBtn" class="btn btn-success" href="#" target="_blank">
+        ⬇ Baixar Instalador
+      </a>
+
+      <ul class="steps">
+        <li data-step="1">Clique em "Baixar Instalador"</li>
+        <li data-step="2">Aguarde o download terminar</li>
+        <li data-step="3">Execute o arquivo <code>.exe</code> baixado</li>
+        <li data-step="4">Siga as instruções do assistente de instalação</li>
+      </ul>
+    </div>
+
+    <footer>
+      Lummar Plásticos · Sistema de Propagandas · Agente de Deploy
+    </footer>
+
+    <script>
+      // ──────────────────────────────────────────────────────────────
+      // Helpers
+      // ──────────────────────────────────────────────────────────────
+      const serverBase = window.location.origin; // ex: http://192.168.1.10:3000
+
+      const $badge = document.getElementById("badge");
+      const $myIp = document.getElementById("myIp");
+      const $serverAddr = document.getElementById("serverAddr");
+      const $lastActivity = document.getElementById("lastActivity");
+      const $logBox = document.getElementById("logBox");
+      const $downloadArea = document.getElementById("downloadArea");
+      const $downloadBtn = document.getElementById("downloadBtn");
+
+      function log(text, type = "info") {
+        const el = document.createElement("div");
+        el.className = "log-entry " + type;
+        const ts = new Date().toLocaleTimeString("pt-BR");
+        el.textContent = `[${ts}] ${text}`;
+        $logBox.appendChild(el);
+        $logBox.scrollTop = $logBox.scrollHeight;
+        $lastActivity.textContent = ts;
+      }
+
+      function setBadge(state) {
+        const MAP = {
+          connecting: { label: "Conectando…", cls: "connecting" },
+          connected: { label: "Conectado", cls: "connected" },
+          disconnected: { label: "Desconectado", cls: "disconnected" },
+        };
+        const cfg = MAP[state] || MAP.disconnected;
+        $badge.className = "badge " + cfg.cls;
+        $badge.innerHTML = `<span class="dot ${state === "connecting" ? "pulse" : ""}"></span>${cfg.label}`;
+      }
+
+      $serverAddr.textContent = serverBase;
+
+      // ──────────────────────────────────────────────────────────────
+      // 1. Registra IP desta máquina
+      // ──────────────────────────────────────────────────────────────
+      fetch(serverBase + "/api/client-ip")
+        .then((r) => r.json())
+        .then((data) => {
+          $myIp.textContent = data.ip || "desconhecido";
+          log("IP registrado no servidor: " + (data.ip || "?"), "ok");
+        })
+        .catch(() => log("Não foi possível registrar IP.", "warn"));
+
+      // ──────────────────────────────────────────────────────────────
+      // 2. Conecta ao SSE e escuta comandos de deploy
+      // ──────────────────────────────────────────────────────────────
+      let eventSource = null;
+      let reconnectTimeout = null;
+      let reconnectDelay = 3000;
+
+      function connect() {
+        setBadge("connecting");
+        log("Conectando ao servidor…");
+
+        eventSource = new EventSource(serverBase + "/api/deploy/listen");
+
+        eventSource.onmessage = function (e) {
+          let data;
+          try {
+            data = JSON.parse(e.data);
+          } catch {
+            return;
+          }
+
+          if (data.type === "ping") {
+            $lastActivity.textContent = new Date().toLocaleTimeString("pt-BR");
+            return;
+          }
+
+          if (data.type === "connected") {
+            setBadge("connected");
+            $myIp.textContent = data.ip || $myIp.textContent;
+            log("Agente conectado com sucesso!", "ok");
+            reconnectDelay = 3000;
+            return;
+          }
+
+          if (data.type === "install") {
+            log("🚀 Recebido comando de instalação do servidor!", "ok");
+            log("URL do instalador: " + data.url, "info");
+            showDownload(data.url);
+            return;
+          }
+        };
+
+        eventSource.onerror = function () {
+          setBadge("disconnected");
+          log(
+            "Conexão perdida. Reconectando em " + reconnectDelay / 1000 + "s…",
+            "warn",
+          );
+          eventSource.close();
+          eventSource = null;
+          reconnectTimeout = setTimeout(() => {
+            reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+            connect();
+          }, reconnectDelay);
+        };
+      }
+
+      connect();
+
+      // ──────────────────────────────────────────────────────────────
+      // 3. Mostra a área de download e inicia automaticamente
+      // ──────────────────────────────────────────────────────────────
+      function showDownload(url) {
+        $downloadBtn.href = url;
+        $downloadArea.style.display = "flex";
+
+        // Dispara o download diretamente via window.location.href.
+        // Isso é necessário porque navegadores modernos bloqueiam downloads
+        // programáticos (a.click()) gerados sem gesto direto do usuário.
+        // Como o servidor responde com Content-Disposition: attachment,
+        // o arquivo .exe é baixado sem que a página seja abandonada.
+        window.location.href = url;
+
+        log("Download do instalador .exe iniciado automaticamente.", "ok");
+
+        // Notificação do navegador (se permitido)
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification("Lummar Deploy", {
+            body: "Instalador recebido! Execute o arquivo .exe após o download.",
+            icon: "/favicon.ico",
+          });
+        } else if (
+          "Notification" in window &&
+          Notification.permission !== "denied"
+        ) {
+          Notification.requestPermission().then((p) => {
+            if (p === "granted") {
+              new Notification("Lummar Deploy", {
+                body: "Instalador recebido! Execute o arquivo .exe após o download.",
+              });
+            }
+          });
+        }
+      }
+    </script>
+  </body>
+</html>

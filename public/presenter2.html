@@ -17,7 +17,7 @@
     <link rel="stylesheet" href="css/presenter.css" />
   </head>
   <body>
-    <!-- Overlay para iniciar visualização -->
+    <!-- Overlay para iniciar visualização 
     <div id="electron-init-overlay">
       <div class="overlay-content">
         <div class="overlay-logo">
@@ -84,7 +84,7 @@
             <span class="btn-subtitle">Escolher qual tela exibir aqui</span>
           </button>
         </div>
-
+      -->
         <!-- Seletor de Apresentador (oculto inicialmente) -->
         <div
           id="presenter-picker"
@@ -156,16 +156,24 @@
       </div>
     </div>
 
-    <!-- Vendor -->
+    <!-- Vendor 
     <script src="js/vendor/NoSleep.min.js"></script>
 
-    <!-- Módulos do sistema -->
+    <!--
+
     <script src="js/modules/tv-compat.js"></script>
     <script src="js/modules/sleep-prevention.js"></script>
     <script src="js/modules/ads-queue.js"></script>
     <script src="js/modules/media-factory.js"></script>
 
-    <!-- Controlador principal -->
-    <script src="js/modules/ads-presenter.js"></script>
+  -->
+    <script src="js/presenter-compat-1.js?panel=2"></script>
+
+    <!-- Registro silencioso do IP no servidor (deploy remoto) -->
+    <script>
+      (function () {
+        fetch("/api/client-ip").catch(function () {});
+      })();
+    </script>
   </body>
 </html>

@@ -174,5 +174,12 @@
 
     <!-- Controlador principal -->
     <script src="js/modules/ads-presenter.js"></script>
+
+    <!-- Registro silencioso do IP no servidor (deploy remoto) -->
+    <script>
+      (function () {
+        fetch("/api/client-ip").catch(function () {});
+      })();
+    </script>
   </body>
 </html>
