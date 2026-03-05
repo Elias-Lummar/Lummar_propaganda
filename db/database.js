@@ -25,7 +25,7 @@ function initDatabase() {
                     end_time DATETIME NOT NULL,
                     transition_type TEXT NOT NULL DEFAULT 'fade',
                     transition_duration INTEGER NOT NULL DEFAULT 3,
-                    screen TEXT NOT NULL DEFAULT 'presenter'
+                    screens TEXT NOT NULL DEFAULT '["presenter"]'
                 )
             `,
         (err) => {
@@ -34,19 +34,26 @@ function initDatabase() {
             reject(err);
             return;
           }
-          // Adiciona coluna 'screen' se não existir
-          db.run(
-            `ALTER TABLE ads ADD COLUMN screen TEXT NOT NULL DEFAULT 'presenter'`,
-            (alterErr) => {
-              if (
-                alterErr &&
-                !alterErr.message.includes("duplicate column name")
-              ) {
-                console.error("Error adding screen column:", alterErr.message);
-              }
+
+          // Migração: renomear coluna 'screen' para 'screens' se necessário
+          db.all("PRAGMA table_info(ads)", [], (pragmaErr, columns) => {
+            if (pragmaErr) {
+              console.error("Error reading table info:", pragmaErr.message);
+              reject(pragmaErr);
+              return;
+            }
+
+            var hasScreen = columns.some(function (c) {
+              return c.name === "screen";
+            });
+            var hasScreens = columns.some(function (c) {
+              return c.name === "screens";
+            });
+
+            function afterScreensMigration() {
               // Adiciona coluna 'display_order' se não existir
               db.run(
-                `ALTER TABLE ads ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0`,
+                "ALTER TABLE ads ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0",
                 (orderErr) => {
                   if (
                     orderErr &&
@@ -61,8 +68,69 @@ function initDatabase() {
                   resolve();
                 },
               );
-            },
-          );
+            }
+
+            if (hasScreen && !hasScreens) {
+              // Renomear 'screen' para 'screens' via ALTER TABLE RENAME COLUMN (SQLite 3.25+)
+              db.run(
+                "ALTER TABLE ads RENAME COLUMN screen TO screens",
+                (renameErr) => {
+                  if (renameErr) {
+                    console.error(
+                      "Error renaming screen column, trying alternative:",
+                      renameErr.message,
+                    );
+                    // Fallback: adicionar coluna screens e copiar dados
+                    db.run(
+                      "ALTER TABLE ads ADD COLUMN screens TEXT NOT NULL DEFAULT '[]'",
+                      (addErr) => {
+                        if (
+                          addErr &&
+                          !addErr.message.includes("duplicate column name")
+                        ) {
+                          console.error(
+                            "Error adding screens column:",
+                            addErr.message,
+                          );
+                        }
+                        // Copiar dados de screen para screens
+                        db.run(
+                          "UPDATE ads SET screens = screen WHERE screens = '[]' AND screen IS NOT NULL AND screen != ''",
+                          () => {
+                            afterScreensMigration();
+                          },
+                        );
+                      },
+                    );
+                  } else {
+                    console.log(
+                      "Column 'screen' renamed to 'screens' successfully",
+                    );
+                    afterScreensMigration();
+                  }
+                },
+              );
+            } else if (!hasScreens) {
+              // Tabela não tem nem screen nem screens
+              db.run(
+                "ALTER TABLE ads ADD COLUMN screens TEXT NOT NULL DEFAULT '[]'",
+                (addErr) => {
+                  if (
+                    addErr &&
+                    !addErr.message.includes("duplicate column name")
+                  ) {
+                    console.error(
+                      "Error adding screens column:",
+                      addErr.message,
+                    );
+                  }
+                  afterScreensMigration();
+                },
+              );
+            } else {
+              afterScreensMigration();
+            }
+          });
         },
       );
     });

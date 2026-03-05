@@ -117,6 +117,141 @@
       });
   }
 
+  // ========================================================================
+  // Upload com progresso via XMLHttpRequest
+  // ========================================================================
+  function uploadFileWithProgress(file) {
+    return new Promise(function (resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      var formData = new FormData();
+      formData.append("file", file);
+
+      // Criar/mostrar overlay de progresso
+      showUploadOverlay(file.name, file.size);
+
+      xhr.upload.addEventListener("progress", function (e) {
+        if (e.lengthComputable) {
+          var percent = Math.round((e.loaded / e.total) * 100);
+          updateUploadProgress(percent, e.loaded, e.total);
+        }
+      });
+
+      xhr.addEventListener("load", function () {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          updateUploadProgress(100, file.size, file.size, "Processando...");
+          try {
+            var result = JSON.parse(xhr.responseText);
+            setTimeout(function () {
+              hideUploadOverlay();
+            }, 400);
+            resolve(result);
+          } catch (e) {
+            hideUploadOverlay();
+            reject(new Error("Resposta inválida do servidor"));
+          }
+        } else {
+          hideUploadOverlay();
+          try {
+            var errData = JSON.parse(xhr.responseText);
+            reject(
+              new Error(
+                errData.error || "Erro no upload (HTTP " + xhr.status + ")",
+              ),
+            );
+          } catch (e) {
+            reject(
+              new Error("Erro no upload do arquivo (HTTP " + xhr.status + ")"),
+            );
+          }
+        }
+      });
+
+      xhr.addEventListener("error", function () {
+        hideUploadOverlay();
+        reject(new Error("Falha na conexão durante o upload"));
+      });
+
+      xhr.addEventListener("abort", function () {
+        hideUploadOverlay();
+        reject(new Error("Upload cancelado"));
+      });
+
+      xhr.addEventListener("timeout", function () {
+        hideUploadOverlay();
+        reject(new Error("Upload expirou (timeout)"));
+      });
+
+      xhr.timeout = 10 * 60 * 1000; // 10 minutos
+      xhr.open("POST", "/api/upload", true);
+      xhr.send(formData);
+    });
+  }
+
+  function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    if (bytes < 1024 * 1024 * 1024)
+      return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+    return (bytes / (1024 * 1024 * 1024)).toFixed(2) + " GB";
+  }
+
+  function showUploadOverlay(fileName, fileSize) {
+    // Remover se já existe
+    var existing = document.getElementById("uploadOverlay");
+    if (existing) existing.remove();
+
+    var overlay = document.createElement("div");
+    overlay.id = "uploadOverlay";
+    overlay.style.cssText =
+      "position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);";
+
+    overlay.innerHTML =
+      '<div style="background:#1a1a2e;border:1px solid #333;border-radius:16px;padding:32px 40px;min-width:400px;max-width:500px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+      '<div style="font-size:48px;margin-bottom:16px;">📤</div>' +
+      '<h3 style="color:#fff;margin:0 0 6px;font-size:18px;">Enviando arquivo...</h3>' +
+      '<p style="color:#888;font-size:13px;margin:0 0 20px;word-break:break-all;" id="uploadFileName">' +
+      fileName +
+      " (" +
+      formatFileSize(fileSize) +
+      ")</p>" +
+      '<div style="background:#2a2a3e;border-radius:10px;height:24px;overflow:hidden;margin-bottom:12px;position:relative;">' +
+      '<div id="uploadProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#4a6cf7,#6a8fff);border-radius:10px;transition:width 0.3s ease;position:relative;">' +
+      '<div style="position:absolute;right:0;top:0;bottom:0;width:40px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.15));border-radius:0 10px 10px 0;animation:uploadShimmer 1.5s infinite;"></div>' +
+      "</div>" +
+      "</div>" +
+      '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+      '<span id="uploadProgressText" style="color:#6a8fff;font-weight:700;font-size:16px;">0%</span>' +
+      '<span id="uploadProgressDetail" style="color:#666;font-size:12px;">Iniciando...</span>' +
+      "</div>" +
+      "<style>@keyframes uploadShimmer{0%{opacity:0.3}50%{opacity:1}100%{opacity:0.3}}</style>" +
+      "</div>";
+
+    document.body.appendChild(overlay);
+  }
+
+  function updateUploadProgress(percent, loaded, total, statusText) {
+    var bar = document.getElementById("uploadProgressBar");
+    var text = document.getElementById("uploadProgressText");
+    var detail = document.getElementById("uploadProgressDetail");
+    if (bar) bar.style.width = percent + "%";
+    if (text) text.textContent = percent + "%";
+    if (detail) {
+      detail.textContent =
+        statusText || formatFileSize(loaded) + " / " + formatFileSize(total);
+    }
+  }
+
+  function hideUploadOverlay() {
+    var overlay = document.getElementById("uploadOverlay");
+    if (overlay) {
+      overlay.style.transition = "opacity 0.3s";
+      overlay.style.opacity = "0";
+      setTimeout(function () {
+        overlay.remove();
+      }, 300);
+    }
+  }
+
   function processSaveAd(
     fileInput,
     title,
@@ -128,26 +263,28 @@
   ) {
     var filePath = "";
     var uploadPromise;
+
+    // Desabilitar botão de submit durante o processo
+    var submitBtn = document.querySelector('#adForm button[type="submit"]');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML =
+        '<i class="fas fa-spinner fa-spin me-1"></i>Enviando...';
+    }
+
     if (fileInput.files[0]) {
-      var uploadData = new FormData();
-      uploadData.append("file", fileInput.files[0]);
-      uploadPromise = fetch("/api/upload", {
-        method: "POST",
-        body: uploadData,
-      })
-        .then(function (uploadResponse) {
-          if (!uploadResponse.ok) throw new Error("Erro no upload do arquivo");
-          return uploadResponse.json();
-        })
-        .then(function (uploadResult) {
+      uploadPromise = uploadFileWithProgress(fileInput.files[0]).then(
+        function (uploadResult) {
           filePath = uploadResult.file_path;
-        });
+        },
+      );
     } else if (currentEditId) {
       uploadPromise = getAdById(currentEditId).then(function (existingAd) {
         filePath = existingAd.file_path;
       });
     } else {
       showAlert("Por favor, selecione um arquivo!", "danger");
+      resetSubmitButton(submitBtn);
       return;
     }
 
@@ -172,7 +309,11 @@
           body: JSON.stringify(adData),
         })
           .then(function (response) {
-            if (!response.ok) throw new Error("Erro ao salvar propaganda");
+            if (!response.ok) {
+              return response.json().then(function (errData) {
+                throw new Error(errData.error || "Erro ao salvar propaganda");
+              });
+            }
             return response.json();
           })
           .then(function (result) {
@@ -187,11 +328,25 @@
           })
           .catch(function (error) {
             showAlert("Erro: " + error.message, "danger");
+          })
+          .finally(function () {
+            resetSubmitButton(submitBtn);
           });
       })
       .catch(function (error) {
         showAlert("Erro: " + error.message, "danger");
+        resetSubmitButton(submitBtn);
       });
+  }
+
+  function resetSubmitButton(btn) {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML =
+        '<i class="fas fa-save me-1"></i><span id="submitText">' +
+        (currentEditId ? "Atualizar Propaganda" : "Salvar Propaganda") +
+        "</span>";
+    }
   }
 
   function getAdById(id) {
@@ -218,8 +373,8 @@
         event.target.value = "";
         return;
       }
-      if (file.size > 100 * 1024 * 1024) {
-        showAlert("O arquivo é muito grande! Tamanho máximo: 100MB", "danger");
+      if (file.size > 1024 * 1024 * 1024) {
+        showAlert("O arquivo é muito grande! Tamanho máximo: 1GB", "danger");
         event.target.value = "";
         return;
       }

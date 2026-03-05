@@ -12,9 +12,18 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "1gb" }));
+app.use(express.urlencoded({ extended: true, limit: "1gb" }));
 app.use(express.static("public"));
+
+// Timeout maior para uploads grandes (10 minutos)
+app.use((req, res, next) => {
+  if (req.url === "/api/upload") {
+    req.setTimeout(10 * 60 * 1000); // 10 min
+    res.setTimeout(10 * 60 * 1000);
+  }
+  next();
+});
 
 // Garantir diretório de uploads
 const uploadsDir = path.join(__dirname, "public", "uploads");
@@ -33,7 +42,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 100 * 1024 * 1024 },
+  limits: { fileSize: 1024 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (
       file.mimetype.startsWith("image/") ||
@@ -202,8 +211,15 @@ app.post("/api/ads", (req, res) => {
     transition_duration,
     screens,
   } = req.body;
+
+  console.log("[POST /api/ads] Recebido:", { title, file_path, screens });
+
   if (!Array.isArray(screens) || !screens.length) {
     return res.status(400).json({ error: "Selecione ao menos um painel" });
+  }
+
+  if (!file_path) {
+    return res.status(400).json({ error: "Caminho do arquivo não informado" });
   }
 
   const db = getDb();
@@ -317,21 +333,55 @@ app.delete("/api/ads/:id", (req, res) => {
   );
 });
 
-app.post("/api/upload", upload.single("file"), async (req, res) => {
-  const file_path = "/uploads/" + req.file.filename;
-  let duration = 0;
+app.post(
+  "/api/upload",
+  (req, res, next) => {
+    upload.single("file")(req, res, (err) => {
+      if (err) {
+        if (err instanceof multer.MulterError) {
+          if (err.code === "LIMIT_FILE_SIZE") {
+            return res
+              .status(413)
+              .json({ error: "Arquivo muito grande! Tamanho máximo: 1GB" });
+          }
+          return res
+            .status(400)
+            .json({ error: "Erro no upload: " + err.message });
+        }
+        return res.status(500).json({ error: err.message });
+      }
+      if (!req.file) {
+        return res.status(400).json({ error: "Nenhum arquivo enviado" });
+      }
+      next();
+    });
+  },
+  async (req, res) => {
+    const file_path = "/uploads/" + req.file.filename;
+    let duration = 0;
 
-  if (req.file.mimetype.startsWith("video/")) {
-    duration = await getVideoDuration(
-      path.join(__dirname, "public", file_path),
-    );
-  }
+    if (req.file.mimetype.startsWith("video/")) {
+      duration = await getVideoDuration(
+        path.join(__dirname, "public", file_path),
+      );
+    }
 
-  res.json({ file_path, video_duration: duration });
-});
+    res.json({ file_path, video_duration: duration });
+  },
+);
 
 // Errors
-app.use((err, req, res, next) => res.status(500).json({ error: err.message }));
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res
+        .status(413)
+        .json({ error: "Arquivo muito grande! Tamanho máximo: 1GB" });
+    }
+    return res.status(400).json({ error: "Erro no upload: " + err.message });
+  }
+  res.status(500).json({ error: err.message });
+});
 
 initDatabase().then(() => {
   app.listen(PORT, () =>
