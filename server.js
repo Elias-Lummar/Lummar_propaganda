@@ -207,20 +207,30 @@ app.post("/api/ads", (req, res) => {
   }
 
   const db = getDb();
-  db.run(
-    "INSERT INTO ads (title, file_path, start_time, end_time, transition_type, transition_duration, screens) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    [
-      title,
-      file_path,
-      start_time,
-      end_time,
-      transition_type,
-      transition_duration,
-      JSON.stringify(screens),
-    ],
-    function (err) {
+  // Obter o próximo display_order disponível
+  db.get(
+    "SELECT COALESCE(MAX(display_order), 0) + 1 AS next_order FROM ads",
+    [],
+    (err, row) => {
       if (err) return res.status(500).json({ error: err.message });
-      res.json({ id: this.lastID });
+      const nextOrder = row.next_order;
+      db.run(
+        "INSERT INTO ads (title, file_path, start_time, end_time, transition_type, transition_duration, screens, display_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+          title,
+          file_path,
+          start_time,
+          end_time,
+          transition_type,
+          transition_duration,
+          JSON.stringify(screens),
+          nextOrder,
+        ],
+        function (err) {
+          if (err) return res.status(500).json({ error: err.message });
+          res.json({ id: this.lastID });
+        },
+      );
     },
   );
 });

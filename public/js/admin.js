@@ -242,7 +242,7 @@
         var tbody = document.getElementById("adsTableBody");
         if (tbody) {
           tbody.innerHTML =
-            '<tr><td colspan="7" class="text-center text-danger">Erro ao carregar propagandas</td></tr>';
+            '<tr><td colspan="9" class="text-center text-danger">Erro ao carregar propagandas</td></tr>';
         }
       });
   }
@@ -305,7 +305,7 @@
 
     if (filteredAdsCache.length === 0) {
       tbody.innerHTML =
-        '<tr><td colspan="8" class="text-center text-muted"><i class="fas fa-inbox me-2"></i>Nenhuma propaganda cadastrada para este painel</td></tr>';
+        '<tr><td colspan="9" class="text-center text-muted"><i class="fas fa-inbox me-2"></i>Nenhuma propaganda cadastrada para este painel</td></tr>';
       updatePagination();
       return;
     }
@@ -335,6 +335,9 @@
         '<tr data-ad-id="' +
         ad.id +
         '">' +
+        '<td><span class="badge bg-secondary">' +
+        (globalIndex + 1) +
+        "</span></td>" +
         "<td>" +
         ad.id +
         "</td>" +
@@ -494,26 +497,13 @@
     }
     if (filtIdx <= 0) return; // Já é o primeiro
 
-    var movingAd = filteredAdsCache[filtIdx];
-    var targetAd = filteredAdsCache[filtIdx - 1];
+    // Trocar posições no array
+    var temp = filteredAdsCache[filtIdx];
+    filteredAdsCache[filtIdx] = filteredAdsCache[filtIdx - 1];
+    filteredAdsCache[filtIdx - 1] = temp;
 
-    // Trocar display_order entre os dois
-    var tempOrder = movingAd.display_order;
-    movingAd.display_order = targetAd.display_order;
-    targetAd.display_order = tempOrder;
-
-    // Atualizar no allAds também
-    for (var j = 0; j < allAds.length; j++) {
-      if (allAds[j].id === movingAd.id)
-        allAds[j].display_order = movingAd.display_order;
-      if (allAds[j].id === targetAd.id)
-        allAds[j].display_order = targetAd.display_order;
-    }
-
-    // Ordenar allAds por display_order para que o filtro preserve a ordem
-    allAds.sort(function (a, b) {
-      return a.display_order - b.display_order;
-    });
+    // Reatribuir display_order sequencial a todos os itens filtrados
+    reassignDisplayOrder();
 
     // Re-renderizar e mostrar botão salvar
     renderAdsTable(currentPanel);
@@ -531,31 +521,32 @@
     }
     if (filtIdx < 0 || filtIdx >= filteredAdsCache.length - 1) return; // Já é o último
 
-    var movingAd = filteredAdsCache[filtIdx];
-    var targetAd = filteredAdsCache[filtIdx + 1];
+    // Trocar posições no array
+    var temp = filteredAdsCache[filtIdx];
+    filteredAdsCache[filtIdx] = filteredAdsCache[filtIdx + 1];
+    filteredAdsCache[filtIdx + 1] = temp;
 
-    // Trocar display_order entre os dois
-    var tempOrder = movingAd.display_order;
-    movingAd.display_order = targetAd.display_order;
-    targetAd.display_order = tempOrder;
-
-    // Atualizar no allAds também
-    for (var j = 0; j < allAds.length; j++) {
-      if (allAds[j].id === movingAd.id)
-        allAds[j].display_order = movingAd.display_order;
-      if (allAds[j].id === targetAd.id)
-        allAds[j].display_order = targetAd.display_order;
-    }
-
-    // Ordenar allAds por display_order para que o filtro preserve a ordem
-    allAds.sort(function (a, b) {
-      return a.display_order - b.display_order;
-    });
+    // Reatribuir display_order sequencial a todos os itens filtrados
+    reassignDisplayOrder();
 
     // Re-renderizar e mostrar botão salvar
     renderAdsTable(currentPanel);
     markOrderChanged();
   };
+
+  // Reatribui display_order sequencial (1,2,3...) após troca de posição
+  function reassignDisplayOrder() {
+    for (var i = 0; i < filteredAdsCache.length; i++) {
+      filteredAdsCache[i].display_order = i + 1;
+      // Sincronizar no allAds
+      for (var j = 0; j < allAds.length; j++) {
+        if (allAds[j].id === filteredAdsCache[i].id) {
+          allAds[j].display_order = i + 1;
+          break;
+        }
+      }
+    }
+  }
 
   function markOrderChanged() {
     orderChanged = true;
@@ -572,7 +563,7 @@
     for (var i = 0; i < filteredAdsCache.length; i++) {
       orders.push({
         id: filteredAdsCache[i].id,
-        order: filteredAdsCache[i].display_order,
+        order: i + 1,
       });
     }
 
@@ -599,7 +590,7 @@
     for (var i = 0; i < filteredAdsCache.length; i++) {
       orders.push({
         id: filteredAdsCache[i].id,
-        order: filteredAdsCache[i].display_order,
+        order: i + 1,
       });
     }
 
