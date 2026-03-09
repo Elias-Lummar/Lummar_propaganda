@@ -4,11 +4,68 @@
   var currentPanel = "presenter"; // Painel atualmente selecionado
   var allAds = []; // Cache de todas as propagandas
   var orderChanged = false; // Flag para indicar mudança na ordem
+  var isReordering = false; // Flag para indicar se está em modo reorder/drag-and-drop
+  var lastMovedAdId = null; // ID do último item movido (para highlight visual)
+  var dragSrcId = null; // ID do item sendo arrastado no drag-and-drop
+  var isDragFromHandle = false; // true se o drag iniciou a partir do handle
 
   // Variáveis de paginação
   var currentPage = 1;
   var itemsPerPage = 50;
   var filteredAdsCache = [];
+
+  // Auto-refresh
+  var AUTO_REFRESH_DELAY = 2; // segundos entre cada atualização automática
+  var autoRefreshCountdown = 0;
+  var countdownTimerId = null;
+
+  function updateRefreshCountdown(seconds) {
+    var badge = document.getElementById("autoRefreshCountdown");
+    if (badge) badge.textContent = seconds + "s";
+  }
+
+  function stopAutoRefresh() {
+    if (countdownTimerId) {
+      clearInterval(countdownTimerId);
+      countdownTimerId = null;
+    }
+    // Mostrar ⏸ no badge se está em modo reorder
+    var badge = document.getElementById("autoRefreshCountdown");
+    if (badge) {
+      if (isReordering) {
+        badge.textContent = "⏸";
+        badge.style.display = "inline";
+        badge.title = "Auto-refresh pausado durante reordenação";
+      }
+    }
+  }
+
+  function startAutoRefresh() {
+    // Não inicia auto-refresh se está em modo reorder
+    if (isReordering) return;
+
+    // Restaurar badge ao estado normal
+    var badge = document.getElementById("autoRefreshCountdown");
+    if (badge) {
+      badge.title = "Próxima atualização automática";
+      badge.style.display = "inline";
+    }
+
+    stopAutoRefresh();
+    autoRefreshCountdown = AUTO_REFRESH_DELAY;
+    updateRefreshCountdown(autoRefreshCountdown);
+    countdownTimerId = setInterval(function () {
+      autoRefreshCountdown--;
+      updateRefreshCountdown(autoRefreshCountdown);
+      if (autoRefreshCountdown <= 0) {
+        stopAutoRefresh();
+        // Verifica novamente se não entrou em reorder enquanto aguardava
+        if (!isReordering) {
+          loadAds();
+        }
+      }
+    }, 1000);
+  }
 
   function bindEvents() {
     document.getElementById("adForm").addEventListener("submit", function (e) {
@@ -22,6 +79,48 @@
       });
     document.getElementById("file").addEventListener("change", function (e) {
       handleFileSelect(e);
+    });
+
+    // Rastreia se o drag iniciou a partir do handle (registrado uma única vez)
+    document.addEventListener("mousedown", function (e) {
+      isDragFromHandle = !!(
+        e.target.closest && e.target.closest(".drag-handle")
+      );
+    });
+
+    // Auto-scroll durante drag: rola a página quando o cursor se aproxima das bordas
+    var scrollTimer = null;
+    document.addEventListener("dragover", function (e) {
+      if (dragSrcId === null) return;
+
+      if (scrollTimer) {
+        clearInterval(scrollTimer);
+        scrollTimer = null;
+      }
+
+      var ZONE = 120; // px a partir das bordas para ativar o scroll
+      var y = e.clientY;
+      var vh = window.innerHeight;
+      var speed = 0;
+
+      if (y < ZONE) {
+        speed = -Math.round(12 * (1 - y / ZONE)); // mais rápido quanto mais perto do topo
+      } else if (y > vh - ZONE) {
+        speed = Math.round(12 * (1 - (vh - y) / ZONE)); // mais rápido quanto mais perto do rodapé
+      }
+
+      if (speed !== 0) {
+        scrollTimer = setInterval(function () {
+          window.scrollBy({ top: speed, behavior: "instant" });
+        }, 16);
+      }
+    });
+
+    document.addEventListener("dragend", function () {
+      if (scrollTimer) {
+        clearInterval(scrollTimer);
+        scrollTimer = null;
+      }
     });
   }
 
@@ -382,6 +481,13 @@
   }
 
   function loadAds() {
+    // Não recarrega enquanto o usuário está reordenando
+    if (isReordering) return;
+
+    stopAutoRefresh();
+    var refreshIcon = document.querySelector("#refreshBtn .fa-sync-alt");
+    if (refreshIcon) refreshIcon.classList.add("fa-spin");
+
     fetch("/api/ads")
       .then(function (response) {
         if (!response.ok) throw new Error("Erro ao carregar propagandas");
@@ -391,6 +497,8 @@
         allAds = ads;
         createPanelTabs();
         renderAdsTable(currentPanel);
+        if (refreshIcon) refreshIcon.classList.remove("fa-spin");
+        startAutoRefresh();
       })
       .catch(function (error) {
         console.log("Erro ao carregar propagandas: " + error.message);
@@ -399,6 +507,8 @@
           tbody.innerHTML =
             '<tr><td colspan="9" class="text-center text-danger">Erro ao carregar propagandas</td></tr>';
         }
+        if (refreshIcon) refreshIcon.classList.remove("fa-spin");
+        startAutoRefresh();
       });
   }
 
@@ -486,10 +596,14 @@
       var isVideo =
         ad.file_path && ad.file_path.match(/\.(mp4|avi|mov|webm)$/i);
 
+      var isMoving = isReordering && ad.id === lastMovedAdId;
       rows +=
         '<tr data-ad-id="' +
         ad.id +
-        '">' +
+        '" draggable="true"' +
+        (isMoving ? ' class="tr-moving"' : "") +
+        ">" +
+        '<td class="drag-handle" title="Arraste para reordenar"><i class="fas fa-grip-vertical"></i></td>' +
         '<td><span class="badge bg-secondary">' +
         (globalIndex + 1) +
         "</span></td>" +
@@ -553,6 +667,7 @@
         "</tr>";
     }
     tbody.innerHTML = rows;
+    bindDragEvents(tbody);
 
     // Atualizar paginação
     updatePagination();
@@ -642,6 +757,11 @@
   // Movimentação de Itens (Ordem)
   // ========================================================================
   window.moveAdUp = function (adId) {
+    // Ativar modo reorder para pausar auto-refresh
+    isReordering = true;
+    lastMovedAdId = adId;
+    stopAutoRefresh();
+
     // Encontrar no filteredAdsCache para saber vizinho
     var filtIdx = -1;
     for (var i = 0; i < filteredAdsCache.length; i++) {
@@ -666,6 +786,11 @@
   };
 
   window.moveAdDown = function (adId) {
+    // Ativar modo reorder para pausar auto-refresh
+    isReordering = true;
+    lastMovedAdId = adId;
+    stopAutoRefresh();
+
     // Encontrar no filteredAdsCache para saber vizinho
     var filtIdx = -1;
     for (var i = 0; i < filteredAdsCache.length; i++) {
@@ -701,6 +826,125 @@
         }
       }
     }
+  }
+
+  // ========================================================================
+  // Drag and Drop — reordenação por arrastar
+  // ========================================================================
+  function bindDragEvents(tbody) {
+    var rows = tbody.querySelectorAll("tr[data-ad-id]");
+
+    rows.forEach(function (row) {
+      // ── dragstart ──────────────────────────────────────────────────────
+      row.addEventListener("dragstart", function (e) {
+        if (!isDragFromHandle) {
+          e.preventDefault();
+          return;
+        }
+        dragSrcId = parseInt(row.getAttribute("data-ad-id"), 10);
+        lastMovedAdId = dragSrcId;
+        isReordering = true;
+        stopAutoRefresh();
+
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", String(dragSrcId));
+
+        // setTimeout: browser captura a aparência original antes de tornar a linha transparente
+        setTimeout(function () {
+          if (row.parentElement) row.classList.add("tr-dragging");
+        }, 0);
+      });
+
+      // ── dragend ────────────────────────────────────────────────────────
+      row.addEventListener("dragend", function () {
+        dragSrcId = null;
+        tbody.querySelectorAll("tr").forEach(function (r) {
+          r.classList.remove(
+            "tr-dragging",
+            "tr-drag-over-above",
+            "tr-drag-over-below",
+          );
+        });
+      });
+
+      // ── dragover ───────────────────────────────────────────────────────
+      row.addEventListener("dragover", function (e) {
+        if (dragSrcId === null) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+
+        var targetId = parseInt(row.getAttribute("data-ad-id"), 10);
+        if (targetId === dragSrcId) return;
+
+        // Remover indicadores anteriores de todas as linhas
+        tbody.querySelectorAll("tr").forEach(function (r) {
+          r.classList.remove("tr-drag-over-above", "tr-drag-over-below");
+        });
+
+        // Mostrar indicador acima ou abaixo do ponto médio da linha
+        var rect = row.getBoundingClientRect();
+        if (e.clientY < rect.top + rect.height / 2) {
+          row.classList.add("tr-drag-over-above");
+        } else {
+          row.classList.add("tr-drag-over-below");
+        }
+      });
+
+      // ── dragleave ──────────────────────────────────────────────────────
+      row.addEventListener("dragleave", function (e) {
+        // Só remove se o cursor saiu da linha (não para um filho interno)
+        if (!row.contains(e.relatedTarget)) {
+          row.classList.remove("tr-drag-over-above", "tr-drag-over-below");
+        }
+      });
+
+      // ── drop ───────────────────────────────────────────────────────────
+      row.addEventListener("drop", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (dragSrcId === null) return;
+
+        var targetId = parseInt(row.getAttribute("data-ad-id"), 10);
+        if (targetId === dragSrcId) return;
+
+        // Posição de inserção: acima ou abaixo do ponto médio
+        var rect = row.getBoundingClientRect();
+        var insertBefore = e.clientY < rect.top + rect.height / 2;
+
+        // Encontrar índices no filteredAdsCache
+        var srcIdx = -1;
+        var tgtIdx = -1;
+        for (var i = 0; i < filteredAdsCache.length; i++) {
+          if (filteredAdsCache[i].id === dragSrcId) srcIdx = i;
+          if (filteredAdsCache[i].id === targetId) tgtIdx = i;
+        }
+        if (srcIdx === -1 || tgtIdx === -1) return;
+
+        // Remover item de origem do array
+        var item = filteredAdsCache.splice(srcIdx, 1)[0];
+
+        // Encontrar novo índice do alvo após remoção
+        var newTgtIdx = -1;
+        for (var i = 0; i < filteredAdsCache.length; i++) {
+          if (filteredAdsCache[i].id === targetId) {
+            newTgtIdx = i;
+            break;
+          }
+        }
+        if (newTgtIdx === -1) return;
+
+        // Inserir na posição correta
+        filteredAdsCache.splice(
+          insertBefore ? newTgtIdx : newTgtIdx + 1,
+          0,
+          item,
+        );
+
+        reassignDisplayOrder();
+        renderAdsTable(currentPanel);
+        markOrderChanged();
+      });
+    });
   }
 
   function markOrderChanged() {
@@ -770,21 +1014,26 @@
           "success",
         );
         orderChanged = false;
+        isReordering = false; // Sair do modo reorder
+        lastMovedAdId = null; // Limpar highlight
         if (btn) {
           btn.classList.remove("btn-pulse");
           btn.style.display = "none";
           btn.disabled = false;
           btn.innerHTML = '<i class="fas fa-save me-1"></i>Salvar Ordem';
         }
-        // Recarrega para sincronizar com o servidor
+        // Recarrega para sincronizar com o servidor e reinicia auto-refresh
         loadAds();
       })
       .catch(function (error) {
         showAlert("Erro ao salvar ordem: " + error.message, "danger");
+        isReordering = false; // Sair do modo reorder mesmo em caso de erro
+        lastMovedAdId = null; // Limpar highlight
         if (btn) {
           btn.disabled = false;
           btn.innerHTML = '<i class="fas fa-save me-1"></i>Salvar Ordem';
         }
+        startAutoRefresh(); // Retomar auto-refresh mesmo em caso de erro
       });
   };
 
@@ -857,11 +1106,26 @@
   };
 
   window.deleteAd = function (id) {
-    if (!confirm("Tem certeza que deseja excluir esta propaganda?")) return;
-    fetch("/api/ads/" + id, { method: "DELETE" })
+    if (!confirm("Tem certeza que deseja excluir esta propaganda desta tela?"))
+      return;
+
+    // Enviar a tela atual junto com o request de exclusão
+    fetch("/api/ads/" + id + "?screen=" + encodeURIComponent(currentPanel), {
+      method: "DELETE",
+    })
       .then(function (response) {
         if (!response.ok) throw new Error("Erro ao excluir propaganda");
-        showAlert("Propaganda excluída com sucesso!", "success");
+        return response.json();
+      })
+      .then(function (data) {
+        if (data.deleted) {
+          showAlert(
+            "Propaganda excluída completamente (nenhuma tela restante)!",
+            "success",
+          );
+        } else {
+          showAlert("Propaganda removida desta tela com sucesso!", "success");
+        }
         loadAds();
       })
       .catch(function (error) {

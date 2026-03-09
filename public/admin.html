@@ -280,8 +280,19 @@
             >
               <i class="fas fa-save me-1"></i>Salvar Ordem
             </button>
-            <button class="btn btn-outline-primary btn-sm" onclick="loadAds()">
+            <button
+              class="btn btn-outline-primary btn-sm"
+              id="refreshBtn"
+              onclick="loadAds()"
+            >
               <i class="fas fa-sync-alt me-1"></i>Atualizar
+              <span
+                id="autoRefreshCountdown"
+                class="badge bg-primary ms-1"
+                title="Próxima atualização automática"
+                style="display: none"
+                >--</span
+              >
             </button>
           </div>
         </div>
@@ -296,6 +307,7 @@
             <table class="table table-striped">
               <thead>
                 <tr>
+                  <th style="width: 28px"></th>
                   <th style="width: 50px">#</th>
                   <th>ID</th>
                   <th>Título</th>
@@ -308,7 +320,7 @@
               </thead>
               <tbody id="adsTableBody">
                 <tr>
-                  <td colspan="8" class="text-center">
+                  <td colspan="9" class="text-center">
                     <div class="spinner-border text-primary" role="status">
                       <span class="visually-hidden">Carregando...</span>
                     </div>

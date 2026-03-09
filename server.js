@@ -317,18 +317,61 @@ app.put("/api/ads/:id", (req, res) => {
 
 app.delete("/api/ads/:id", (req, res) => {
   const db = getDb();
+  const screenToRemove = req.query.screen; // Recebe a tela a ser removida
+
   db.get(
-    "SELECT file_path FROM ads WHERE id=?",
+    "SELECT file_path, screens FROM ads WHERE id=?",
     [req.params.id],
     (err, row) => {
-      if (row?.file_path) {
-        const file = path.join(__dirname, "public", row.file_path);
-        if (fs.existsSync(file)) fs.unlinkSync(file);
-      }
+      if (err) return res.status(500).json({ error: err.message });
+      if (!row)
+        return res.status(404).json({ error: "Propaganda não encontrada" });
 
-      db.run("DELETE FROM ads WHERE id=?", [req.params.id], () =>
-        res.json({ success: true }),
-      );
+      // Se nenhuma tela foi especificada, exclui completamente
+      if (!screenToRemove) {
+        // Excluir arquivo
+        if (row?.file_path) {
+          const file = path.join(__dirname, "public", row.file_path);
+          if (fs.existsSync(file)) fs.unlinkSync(file);
+        }
+        // Excluir do banco
+        db.run("DELETE FROM ads WHERE id=?", [req.params.id], () =>
+          res.json({ success: true, deleted: true }),
+        );
+      } else {
+        // Remove apenas a tela especificada do array de screens
+        try {
+          let screens = JSON.parse(row.screens || "[]");
+          screens = screens.filter((s) => s !== screenToRemove);
+
+          if (screens.length === 0) {
+            // Se nenhuma tela ficar, exclui a propaganda completamente
+            if (row?.file_path) {
+              const file = path.join(__dirname, "public", row.file_path);
+              if (fs.existsSync(file)) fs.unlinkSync(file);
+            }
+            db.run("DELETE FROM ads WHERE id=?", [req.params.id], () =>
+              res.json({ success: true, deleted: true }),
+            );
+          } else {
+            // Atualiza apenas o array de screens
+            db.run(
+              "UPDATE ads SET screens = ? WHERE id = ?",
+              [JSON.stringify(screens), req.params.id],
+              () =>
+                res.json({
+                  success: true,
+                  deleted: false,
+                  remainingScreens: screens,
+                }),
+            );
+          }
+        } catch (parseErr) {
+          res
+            .status(500)
+            .json({ error: "Erro ao processar screens: " + parseErr.message });
+        }
+      }
     },
   );
 });
