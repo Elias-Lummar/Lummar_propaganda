@@ -64,8 +64,89 @@ function initDatabase() {
                       orderErr.message,
                     );
                   }
-                  console.log("Database table initialized");
-                  resolve();
+
+                  // Criar tabela de ordens por tela
+                  db.run(
+                    `CREATE TABLE IF NOT EXISTS ad_screen_orders (
+                      ad_id INTEGER NOT NULL,
+                      screen TEXT NOT NULL,
+                      display_order INTEGER NOT NULL DEFAULT 0,
+                      PRIMARY KEY (ad_id, screen)
+                    )`,
+                    (createErr) => {
+                      if (createErr) {
+                        console.error(
+                          "Error creating ad_screen_orders:",
+                          createErr.message,
+                        );
+                      }
+
+                      // Migração: popular ad_screen_orders com dados existentes (apenas se vazia)
+                      db.get(
+                        "SELECT COUNT(*) AS cnt FROM ad_screen_orders",
+                        [],
+                        (countErr, countRow) => {
+                          if (!countErr && countRow && countRow.cnt === 0) {
+                            db.all(
+                              "SELECT id, screens, display_order FROM ads",
+                              [],
+                              (selErr, adRows) => {
+                                if (selErr || !adRows || !adRows.length) {
+                                  console.log("Database table initialized");
+                                  return resolve();
+                                }
+                                let total = 0;
+                                adRows.forEach((row) => {
+                                  try {
+                                    const scrs = JSON.parse(
+                                      row.screens || "[]",
+                                    );
+                                    total += scrs.length;
+                                  } catch (e) {}
+                                });
+                                if (total === 0) {
+                                  console.log("Database table initialized");
+                                  return resolve();
+                                }
+                                let done = 0;
+                                adRows.forEach((row) => {
+                                  try {
+                                    const scrs = JSON.parse(
+                                      row.screens || "[]",
+                                    );
+                                    scrs.forEach((screen) => {
+                                      db.run(
+                                        "INSERT OR IGNORE INTO ad_screen_orders (ad_id, screen, display_order) VALUES (?, ?, ?)",
+                                        [row.id, screen, row.display_order],
+                                        () => {
+                                          done++;
+                                          if (done === total) {
+                                            console.log(
+                                              "Database table initialized",
+                                            );
+                                            resolve();
+                                          }
+                                        },
+                                      );
+                                    });
+                                  } catch (e) {
+                                    done++;
+                                    if (done === total) {
+                                      console.log("Database table initialized");
+                                      resolve();
+                                    }
+                                  }
+                                });
+                              },
+                            );
+                          } else {
+                            console.log("Database table initialized");
+                            resolve();
+                          }
+                        },
+                      );
+                    },
+                  );
                 },
               );
             }

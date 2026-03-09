@@ -560,12 +560,20 @@
     var tbody = document.getElementById("adsTableBody");
     if (!tbody) return;
 
-    // Filtrar propagandas pelo painel selecionado e ordenar por display_order
+    // Filtrar propagandas pelo painel selecionado e ordenar por display_order da tela específica
     filteredAdsCache = allAds.filter(function (ad) {
       return ad.screens && ad.screens.indexOf(panelFilter) !== -1;
     });
     filteredAdsCache.sort(function (a, b) {
-      return (a.display_order || 0) - (b.display_order || 0);
+      var orderA =
+        a.screen_orders && a.screen_orders[panelFilter] !== undefined
+          ? a.screen_orders[panelFilter]
+          : a.display_order || 0;
+      var orderB =
+        b.screen_orders && b.screen_orders[panelFilter] !== undefined
+          ? b.screen_orders[panelFilter]
+          : b.display_order || 0;
+      return orderA - orderB;
     });
 
     if (filteredAdsCache.length === 0) {
@@ -814,14 +822,17 @@
     markOrderChanged();
   };
 
-  // Reatribui display_order sequencial (1,2,3...) após troca de posição
+  // Reatribui display_order sequencial (1,2,3...) apenas para a tela atual após troca de posição
   function reassignDisplayOrder() {
     for (var i = 0; i < filteredAdsCache.length; i++) {
-      filteredAdsCache[i].display_order = i + 1;
+      if (!filteredAdsCache[i].screen_orders)
+        filteredAdsCache[i].screen_orders = {};
+      filteredAdsCache[i].screen_orders[currentPanel] = i + 1;
       // Sincronizar no allAds
       for (var j = 0; j < allAds.length; j++) {
         if (allAds[j].id === filteredAdsCache[i].id) {
-          allAds[j].display_order = i + 1;
+          if (!allAds[j].screen_orders) allAds[j].screen_orders = {};
+          allAds[j].screen_orders[currentPanel] = i + 1;
           break;
         }
       }
@@ -957,7 +968,7 @@
   }
 
   function saveOrderToServer() {
-    // Envia TODAS as ordens do filteredAdsCache atual
+    // Envia as ordens do filteredAdsCache atual para a tela específica
     var orders = [];
     for (var i = 0; i < filteredAdsCache.length; i++) {
       orders.push({
@@ -969,7 +980,7 @@
     fetch("/api/ads/reorder", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ orders: orders }),
+      body: JSON.stringify({ orders: orders, screen: currentPanel }),
     })
       .then(function (response) {
         if (!response.ok) throw new Error("Erro ao salvar ordem");
@@ -1002,7 +1013,7 @@
     fetch("/api/ads/reorder", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ orders: orders }),
+      body: JSON.stringify({ orders: orders, screen: currentPanel }),
     })
       .then(function (response) {
         if (!response.ok) throw new Error("Erro ao salvar ordem");

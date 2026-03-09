@@ -174,8 +174,26 @@ app.get("/api/ads", (req, res) => {
     [],
     (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
-      res.json(
-        rows.map((r) => ({ ...r, screens: JSON.parse(r.screens || "[]") })),
+      db.all(
+        "SELECT ad_id, screen, display_order FROM ad_screen_orders",
+        [],
+        (err2, orderRows) => {
+          if (err2) return res.status(500).json({ error: err2.message });
+          const screenOrders = {};
+          if (orderRows) {
+            for (const r of orderRows) {
+              if (!screenOrders[r.ad_id]) screenOrders[r.ad_id] = {};
+              screenOrders[r.ad_id][r.screen] = r.display_order;
+            }
+          }
+          res.json(
+            rows.map((r) => ({
+              ...r,
+              screens: JSON.parse(r.screens || "[]"),
+              screen_orders: screenOrders[r.id] || {},
+            })),
+          );
+        },
       );
     },
   );
@@ -187,8 +205,12 @@ app.get("/api/ads/active", (req, res) => {
   const panel = req.query.panel || "presenter";
 
   db.all(
-    "SELECT * FROM ads WHERE start_time <= ? AND end_time >= ? ORDER BY display_order ASC, id ASC",
-    [now, now],
+    `SELECT ads.*, COALESCE(aso.display_order, ads.display_order) AS effective_order
+     FROM ads
+     LEFT JOIN ad_screen_orders aso ON aso.ad_id = ads.id AND aso.screen = ?
+     WHERE ads.start_time <= ? AND ads.end_time >= ?
+     ORDER BY effective_order ASC, ads.id ASC`,
+    [panel, now, now],
     (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
 
@@ -244,7 +266,27 @@ app.post("/api/ads", (req, res) => {
         ],
         function (err) {
           if (err) return res.status(500).json({ error: err.message });
-          res.json({ id: this.lastID });
+          const newId = this.lastID;
+          // Inserir ordens por tela em ad_screen_orders
+          let pending = screens.length;
+          if (pending === 0) return res.json({ id: newId });
+          screens.forEach((screen) => {
+            db.get(
+              "SELECT COALESCE(MAX(display_order), 0) + 1 AS next_order FROM ad_screen_orders WHERE screen = ?",
+              [screen],
+              (e2, row2) => {
+                const screenOrder = row2 && !e2 ? row2.next_order : nextOrder;
+                db.run(
+                  "INSERT OR IGNORE INTO ad_screen_orders (ad_id, screen, display_order) VALUES (?, ?, ?)",
+                  [newId, screen, screenOrder],
+                  () => {
+                    pending--;
+                    if (pending === 0) res.json({ id: newId });
+                  },
+                );
+              },
+            );
+          });
         },
       );
     },
@@ -253,23 +295,37 @@ app.post("/api/ads", (req, res) => {
 
 // Reorder ads (drag-and-drop) — must come BEFORE /api/ads/:id
 app.put("/api/ads/reorder", (req, res) => {
-  const { orders } = req.body;
+  const { orders, screen } = req.body;
   if (!Array.isArray(orders)) {
     return res.status(400).json({ error: "orders deve ser um array" });
   }
 
   const db = getDb();
-  const stmt = db.prepare("UPDATE ads SET display_order = ? WHERE id = ?");
   let errors = [];
 
   db.serialize(() => {
     db.run("BEGIN TRANSACTION");
-    for (let i = 0; i < orders.length; i++) {
-      stmt.run([orders[i].order, orders[i].id], (err) => {
-        if (err) errors.push(err.message);
-      });
+    if (screen) {
+      // Ordem específica por tela
+      const stmt = db.prepare(
+        "INSERT OR REPLACE INTO ad_screen_orders (ad_id, screen, display_order) VALUES (?, ?, ?)",
+      );
+      for (let i = 0; i < orders.length; i++) {
+        stmt.run([orders[i].id, screen, orders[i].order], (err) => {
+          if (err) errors.push(err.message);
+        });
+      }
+      stmt.finalize();
+    } else {
+      // Legado: ordem global
+      const stmt = db.prepare("UPDATE ads SET display_order = ? WHERE id = ?");
+      for (let i = 0; i < orders.length; i++) {
+        stmt.run([orders[i].order, orders[i].id], (err) => {
+          if (err) errors.push(err.message);
+        });
+      }
+      stmt.finalize();
     }
-    stmt.finalize();
     db.run("COMMIT", (err) => {
       if (err || errors.length > 0) {
         return res
@@ -296,21 +352,70 @@ app.put("/api/ads/:id", (req, res) => {
   }
 
   const db = getDb();
-  db.run(
-    "UPDATE ads SET title=?, file_path=?, start_time=?, end_time=?, transition_type=?, transition_duration=?, screens=? WHERE id=?",
-    [
-      title,
-      file_path,
-      start_time,
-      end_time,
-      transition_type,
-      transition_duration,
-      JSON.stringify(screens),
-      req.params.id,
-    ],
-    (err) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ success: true });
+
+  // Buscar telas atuais para detectar adições/remoções
+  db.get(
+    "SELECT screens FROM ads WHERE id = ?",
+    [req.params.id],
+    (err0, oldRow) => {
+      if (err0) return res.status(500).json({ error: err0.message });
+      const oldScreens = oldRow ? JSON.parse(oldRow.screens || "[]") : [];
+      const removedScreens = oldScreens.filter((s) => !screens.includes(s));
+      const addedScreens = screens.filter((s) => !oldScreens.includes(s));
+
+      db.run(
+        "UPDATE ads SET title=?, file_path=?, start_time=?, end_time=?, transition_type=?, transition_duration=?, screens=? WHERE id=?",
+        [
+          title,
+          file_path,
+          start_time,
+          end_time,
+          transition_type,
+          transition_duration,
+          JSON.stringify(screens),
+          req.params.id,
+        ],
+        (err) => {
+          if (err) return res.status(500).json({ error: err.message });
+
+          function removeScreens(cb) {
+            if (!removedScreens.length) return cb();
+            let pending = removedScreens.length;
+            removedScreens.forEach((screen) => {
+              db.run(
+                "DELETE FROM ad_screen_orders WHERE ad_id = ? AND screen = ?",
+                [req.params.id, screen],
+                () => {
+                  if (--pending === 0) cb();
+                },
+              );
+            });
+          }
+
+          function addScreens(cb) {
+            if (!addedScreens.length) return cb();
+            let pending = addedScreens.length;
+            addedScreens.forEach((screen) => {
+              db.get(
+                "SELECT COALESCE(MAX(display_order), 0) + 1 AS next_order FROM ad_screen_orders WHERE screen = ?",
+                [screen],
+                (e2, row2) => {
+                  const order = row2 && !e2 ? row2.next_order : 1;
+                  db.run(
+                    "INSERT OR IGNORE INTO ad_screen_orders (ad_id, screen, display_order) VALUES (?, ?, ?)",
+                    [req.params.id, screen, order],
+                    () => {
+                      if (--pending === 0) cb();
+                    },
+                  );
+                },
+              );
+            });
+          }
+
+          removeScreens(() => addScreens(() => res.json({ success: true })));
+        },
+      );
     },
   );
 });
@@ -334,9 +439,15 @@ app.delete("/api/ads/:id", (req, res) => {
           const file = path.join(__dirname, "public", row.file_path);
           if (fs.existsSync(file)) fs.unlinkSync(file);
         }
-        // Excluir do banco
-        db.run("DELETE FROM ads WHERE id=?", [req.params.id], () =>
-          res.json({ success: true, deleted: true }),
+        // Limpar ordens por tela e excluir do banco
+        db.run(
+          "DELETE FROM ad_screen_orders WHERE ad_id = ?",
+          [req.params.id],
+          () => {
+            db.run("DELETE FROM ads WHERE id=?", [req.params.id], () =>
+              res.json({ success: true, deleted: true }),
+            );
+          },
         );
       } else {
         // Remove apenas a tela especificada do array de screens
@@ -350,20 +461,32 @@ app.delete("/api/ads/:id", (req, res) => {
               const file = path.join(__dirname, "public", row.file_path);
               if (fs.existsSync(file)) fs.unlinkSync(file);
             }
-            db.run("DELETE FROM ads WHERE id=?", [req.params.id], () =>
-              res.json({ success: true, deleted: true }),
+            db.run(
+              "DELETE FROM ad_screen_orders WHERE ad_id = ?",
+              [req.params.id],
+              () => {
+                db.run("DELETE FROM ads WHERE id=?", [req.params.id], () =>
+                  res.json({ success: true, deleted: true }),
+                );
+              },
             );
           } else {
-            // Atualiza apenas o array de screens
+            // Atualiza apenas o array de screens e remove a entrada de ordem da tela removida
             db.run(
-              "UPDATE ads SET screens = ? WHERE id = ?",
-              [JSON.stringify(screens), req.params.id],
-              () =>
-                res.json({
-                  success: true,
-                  deleted: false,
-                  remainingScreens: screens,
-                }),
+              "DELETE FROM ad_screen_orders WHERE ad_id = ? AND screen = ?",
+              [req.params.id, screenToRemove],
+              () => {
+                db.run(
+                  "UPDATE ads SET screens = ? WHERE id = ?",
+                  [JSON.stringify(screens), req.params.id],
+                  () =>
+                    res.json({
+                      success: true,
+                      deleted: false,
+                      remainingScreens: screens,
+                    }),
+                );
+              },
             );
           }
         } catch (parseErr) {
