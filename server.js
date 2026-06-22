@@ -69,39 +69,9 @@ function getVideoDuration(filePath) {
 setupSwagger(app);
 
 // ============================================================================
-// Helper: Detecta IP local da máquina
+// Helper: Detecção de IP local (prefere a LAN/Wi-Fi real, ignora VPN/virtual)
 // ============================================================================
-function getLocalIPAddress() {
-  const os = require("os");
-  const interfaces = os.networkInterfaces();
-
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
-      // Ignora interno e IPv6
-      if (iface.family === "IPv4" && !iface.internal) {
-        return iface.address;
-      }
-    }
-  }
-  return "127.0.0.1";
-}
-
-// Helper: Lista todos os IPs disponíveis (para debug)
-function getAllIPAddresses() {
-  const os = require("os");
-  const interfaces = os.networkInterfaces();
-  const ips = {};
-
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
-      if (iface.family === "IPv4" && !iface.internal) {
-        if (!ips[name]) ips[name] = [];
-        ips[name].push(iface.address);
-      }
-    }
-  }
-  return ips;
-}
+const { getLocalIPAddress, getAllIPAddresses } = require("./lib/network");
 
 // Pages
 app.get("/", (req, res) => res.redirect("/admin"));

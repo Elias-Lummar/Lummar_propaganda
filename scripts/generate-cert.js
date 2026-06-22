@@ -24,20 +24,8 @@
 
 const { execFileSync } = require("child_process");
 const fs = require("fs");
-const os = require("os");
 const path = require("path");
-
-function getLocalIPAddress() {
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
-      if (iface.family === "IPv4" && !iface.internal) {
-        return iface.address;
-      }
-    }
-  }
-  return "127.0.0.1";
-}
+const { getLocalIPAddress } = require("../lib/network");
 
 function isIPv4(value) {
   return /^\d{1,3}(\.\d{1,3}){3}$/.test(value);
