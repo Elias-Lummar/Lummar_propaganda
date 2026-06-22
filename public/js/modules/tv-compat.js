@@ -98,17 +98,6 @@ var TVCompat = (function () {
       objectFit: "contain",
       quirks: [],
     },
-    // Electron (App Desktop)
-    ELECTRON: {
-      name: "Electron",
-      videoCodecs: ["h264", "h265", "vp8", "vp9"],
-      maxResolution: { w: 7680, h: 4320 },
-      supportsWakeLock: true,
-      supportsFullscreen: true,
-      needsVideoPreload: false,
-      objectFit: "contain",
-      quirks: [],
-    },
   };
 
   // ========================================================================
@@ -117,14 +106,6 @@ var TVCompat = (function () {
   function detectPlatform() {
     var ua = navigator.userAgent || "";
     var uaLower = ua.toLowerCase();
-
-    // Electron
-    if (
-      typeof window.electronAPI !== "undefined" ||
-      uaLower.indexOf("electron") !== -1
-    ) {
-      return "ELECTRON";
-    }
 
     // Samsung Tizen
     if (

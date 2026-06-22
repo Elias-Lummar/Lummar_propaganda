@@ -1,23 +1,19 @@
 {
   "name": "sistema-propagandas",
   "version": "1.0.0",
-  "description": "Sistema de apresentação de propagandas com Electron",
-  "main": "./public/js/main.js",
+  "description": "Sistema de apresentação de propagandas (digital signage) com backend Node.js + Express",
+  "main": "server.js",
   "scripts": {
-    "start": "electron .",
-    "dev": "electron . --dev"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
   "keywords": [
-    "electron",
     "ads",
     "presenter",
     "digital-signage"
   ],
   "author": "",
   "license": "MIT",
-  "devDependencies": {
-    "electron": "^28.3.3"
-  },
   "dependencies": {
     "bindings": "^1.5.0",
     "cors": "^2.8.5",

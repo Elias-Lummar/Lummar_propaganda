@@ -780,17 +780,6 @@
   // ========================================================================
 
   /**
-   * Detecta se está rodando dentro do Electron
-   */
-  function isElectron() {
-    return (
-      typeof window.electronAPI !== "undefined" ||
-      (typeof navigator !== "undefined" &&
-        navigator.userAgent.indexOf("Electron") !== -1)
-    );
-  }
-
-  /**
    * Entra em tela cheia usando a Fullscreen API (com prefixos)
    */
   function requestFullscreen() {
@@ -810,22 +799,8 @@
 
   /**
    * Entra em tela cheia automaticamente ao carregar a página.
-   * O overlay é ocultado imediatamente; não há botão de confirmação.
    */
-  function setupFullscreenOverlay() {
-    var overlay = document.getElementById("electron-init-overlay");
-
-    // Oculta o overlay (se existir)
-    if (overlay) {
-      overlay.style.display = "none";
-    }
-
-    // No Electron o kiosk já cuida do fullscreen
-    if (isElectron()) {
-      console.log(LOG_PREFIX + " Electron detectado – fullscreen gerenciado pelo kiosk");
-      return;
-    }
-
+  function setupFullscreen() {
     // Tenta entrar em fullscreen imediatamente
     requestFullscreen();
 
@@ -988,8 +963,8 @@
     // 3. Detecta painel
     state.panel = detectPanel();
 
-    // 3.5. Configura overlay de inicialização em tela cheia
-    setupFullscreenOverlay();
+    // 3.5. Entra em tela cheia automaticamente
+    setupFullscreen();
 
     // 4. Cria fila
     state.queue = AdsQueue.create();

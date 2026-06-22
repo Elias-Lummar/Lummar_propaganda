@@ -11,13 +11,12 @@
  *   - Múltiplas camadas simultâneas em TVs legadas
  *
  * Camadas de proteção (em ordem de prioridade):
- *   1. Electron API (se disponível)
- *   2. NoSleep.js (vídeo invisível + WakeLock API)
- *   3. Wake Lock API nativa
- *   4. Fallback com vídeo invisível manual
- *   5. Fallback com AudioContext keepalive (TVs antigas)
- *   6. Fallback com mouse/keyboard events simulados
- *   7. Fallback com scroll e repaint periódico (TVs legadas)
+ *   1. NoSleep.js (vídeo invisível + WakeLock API)
+ *   2. Wake Lock API nativa
+ *   3. Fallback com vídeo invisível manual
+ *   4. Fallback com AudioContext keepalive (TVs antigas)
+ *   5. Fallback com mouse/keyboard events simulados
+ *   6. Fallback com scroll e repaint periódico (TVs legadas)
  *
  * Em TVs detectadas como antigas, múltiplas camadas são ativadas
  * simultaneamente para máxima proteção.
@@ -132,27 +131,7 @@ var SleepPrevention = (function () {
   }
 
   // ========================================================================
-  // Método 1: Electron API
-  // ========================================================================
-  function tryElectronMethod() {
-    if (
-      window.electronAPI &&
-      typeof window.electronAPI.preventSleep === "function"
-    ) {
-      try {
-        window.electronAPI.preventSleep(true);
-        activeMethod = "electron";
-        console.log(LOG_PREFIX + " ✓ Método ativo: Electron WakeLock");
-        return true;
-      } catch (e) {
-        console.warn(LOG_PREFIX + " Electron preventSleep falhou:", e.message);
-      }
-    }
-    return false;
-  }
-
-  // ========================================================================
-  // Método 2: NoSleep.js
+  // Método 1: NoSleep.js
   // ========================================================================
   function tryNoSleepMethod() {
     if (typeof NoSleep === "undefined") {
@@ -646,12 +625,6 @@ var SleepPrevention = (function () {
         );
       }
 
-      // === Electron: método único e suficiente ===
-      if (tryElectronMethod()) {
-        setupVisibilityListener();
-        return;
-      }
-
       // === TV ANTIGA: ativa MÚLTIPLAS camadas simultaneamente ===
       if (isOldTV) {
         console.log(
@@ -710,18 +683,6 @@ var SleepPrevention = (function () {
      */
     disable: function () {
       isEnabled = false;
-
-      // Electron
-      if (
-        window.electronAPI &&
-        typeof window.electronAPI.preventSleep === "function"
-      ) {
-        try {
-          window.electronAPI.preventSleep(false);
-        } catch (e) {
-          /* */
-        }
-      }
 
       // NoSleep.js
       if (noSleepInstance) {
@@ -834,7 +795,6 @@ var SleepPrevention = (function () {
         isOldTV: isOldTV,
         tvPlatform: tvPlatform,
         eventInterval: getEventInterval(),
-        hasElectron: !!(window.electronAPI && window.electronAPI.preventSleep),
         hasNoSleep: typeof NoSleep !== "undefined",
         hasWakeLockAPI: "wakeLock" in navigator,
         hasAudioContext: !!(window.AudioContext || window.webkitAudioContext),

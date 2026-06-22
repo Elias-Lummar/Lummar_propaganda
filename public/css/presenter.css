@@ -315,33 +315,6 @@ img.media-item {
 }
 
 /* ── Overlay de Inicialização ── */
-#electron-init-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(10, 10, 18, 0.92);
-  display: -webkit-box;
-  display: -ms-flexbox;
-  display: flex;
-  -webkit-box-align: center;
-  -ms-flex-align: center;
-  align-items: center;
-  -webkit-box-pack: center;
-  -ms-flex-pack: center;
-  justify-content: center;
-  z-index: 10000;
-  -webkit-transition: opacity 0.5s ease;
-  -moz-transition: opacity 0.5s ease;
-  transition: opacity 0.5s ease;
-  cursor: default;
-}
-
-#electron-init-overlay.hidden {
-  opacity: 0;
-  pointer-events: none;
-}
 
 /* Container interno */
 .overlay-content {
@@ -493,31 +466,6 @@ img.media-item {
 
 .overlay-btn--fullscreen .btn-icon svg {
   fill: #5a6ef5;
-}
-
-/* ── Botão Electron (verde) ── */
-.overlay-btn--electron {
-  border-color: #2e7d52;
-}
-
-.overlay-btn--electron:hover {
-  background: linear-gradient(135deg, #1a2822 0%, #223a2e 100%);
-  border-color: #3fad6e;
-  -webkit-box-shadow: 0 0 28px rgba(63, 173, 110, 0.3);
-  box-shadow: 0 0 28px rgba(63, 173, 110, 0.3);
-}
-
-.overlay-btn--electron .btn-icon {
-  background: rgba(46, 125, 82, 0.15);
-}
-
-.overlay-btn--electron .btn-icon svg {
-  fill: #3fad6e;
-}
-
-.overlay-btn--electron.loading {
-  opacity: 0.7;
-  pointer-events: none;
 }
 
 /* ── Botão Selecionar Apresentador (laranja/âmbar) ── */

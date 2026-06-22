@@ -108,9 +108,6 @@ app.get("/", (req, res) => res.redirect("/admin"));
 app.get("/admin", (req, res) =>
   res.sendFile(path.join(__dirname, "public", "admin.html")),
 );
-app.get("/selector", (req, res) =>
-  res.sendFile(path.join(__dirname, "public", "screen-selector.html")),
-);
 app.get("/presenter", (req, res) =>
   res.sendFile(path.join(__dirname, "public", "presenter.html")),
 );
@@ -136,51 +133,6 @@ app.get("/api/server-info", (req, res) => {
     host: `http://${localIP}:${PORT}`,
     timestamp: new Date().toISOString(),
   });
-});
-
-// API - Lançar Electron
-let electronProcess = null;
-
-app.post("/api/launch-electron", (req, res) => {
-  const { spawn } = require("child_process");
-
-  // Se já há um processo Electron rodando, avisa
-  if (electronProcess && !electronProcess.killed) {
-    return res.json({
-      success: false,
-      message: "Electron já está em execução",
-    });
-  }
-
-  try {
-    const electronPath = require.resolve("electron/cli.js");
-    const projectRoot = path.resolve(__dirname);
-
-    // Monta argumentos: projeto + presenter (se fornecido)
-    const args = [electronPath, projectRoot];
-    const presenter = req.body && req.body.presenter;
-    if (presenter) {
-      args.push("--presenter=" + presenter);
-    }
-
-    electronProcess = spawn(process.execPath, args, {
-      detached: true,
-      stdio: "ignore",
-      cwd: projectRoot,
-    });
-
-    electronProcess.unref();
-
-    electronProcess.on("exit", () => {
-      electronProcess = null;
-    });
-
-    console.log(`[Electron] Processo iniciado (PID: ${electronProcess.pid})`);
-    res.json({ success: true, pid: electronProcess.pid });
-  } catch (err) {
-    console.error("[Electron] Erro ao iniciar:", err.message);
-    res.status(500).json({ success: false, error: err.message });
-  }
 });
 
 // API - Ads
