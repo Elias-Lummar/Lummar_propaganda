@@ -125,6 +125,49 @@ Tabela `ads`:
 - Validação de datas e horários
 - Tratamento de erros robusto
 
+## 🛌 Anti-hibernação (Keep-Awake) — camada dupla
+
+TVs modernas (Tizen/WebOS com JS atualizado) hibernavam **durante as imagens**
+porque a única coisa que mantinha o painel aceso era a reprodução real de
+vídeo. A correção usa duas camadas:
+
+1. **Vídeo-âncora** (`public/js/modules/keep-awake.js`): um `<video>` mudo, em
+   loop, em tela cheia atrás do conteúdo, que toca **durante as imagens**.
+   Para a TV é mídia ativa, então o painel não hiberna. **Funciona em HTTP
+   puro — não depende de certificado.** Durante vídeos o âncora é pausado.
+2. **Wake Lock API** (bônus): solicitada quando a página é aberta em **HTTPS**
+   com certificado confiável. Em HTTP ela falha de forma silenciosa e o
+   vídeo-âncora cobre o caso.
+
+### Habilitar o HTTPS (para a Wake Lock)
+
+```bash
+# Gera ./certs/server.key e ./certs/server.crt (SAN: localhost + IP da LAN)
+npm run gen-cert
+
+# IP fixo ou hostname extra como SAN:
+npm run gen-cert 192.168.0.50
+npm run gen-cert signage.lummar.local
+```
+
+O servidor passa a ouvir **HTTP (3010) e HTTPS (3443) ao mesmo tempo**, sem
+redirect. Abra os apresentadores por `https://IP:3443/presenter` para ativar
+a Wake Lock. As TVs continuam funcionando por HTTP normalmente.
+
+> ⚠️ **Smart TV nativa (Tizen/WebOS) costuma recusar certificado self-signed**
+> e não permite instalar CA própria. Nesses casos use HTTP (o vídeo-âncora
+> mantém a tela acesa) ou o caminho de **certificado real** abaixo.
+
+### Caminho do certificado real (para HTTPS confiável na smart TV)
+
+1. Subdomínio próprio, ex.: `signage.plasticoslummar.com.br`.
+2. Certificado **Let's Encrypt via desafio DNS-01** (o servidor é LAN, sem 443
+   público) + renovação automática.
+3. **DNS interno** resolvendo esse subdomínio para o IP da LAN (no roteador ou
+   num Pi-hole/dnsmasq, distribuído por DHCP) — TVs não permitem editar
+   "hosts" local.
+4. Aponte `./certs/server.crt` e `./certs/server.key` para o cert emitido.
+
 ## 🚀 Deploy
 
 Para produção, considere:

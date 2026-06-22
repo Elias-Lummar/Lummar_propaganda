@@ -581,8 +581,20 @@
       onLoaded: function () {
         updateDebugInfo();
 
+        var isVideo = MediaFactory.isVideo(ad.file_path);
+
+        // Keep-awake: vídeo segura o painel sozinho (pausa o âncora para
+        // evitar decodificação dupla); imagem depende do vídeo-âncora.
+        if (typeof KeepAwake !== "undefined") {
+          if (isVideo) {
+            KeepAwake.relax();
+          } else {
+            KeepAwake.engage();
+          }
+        }
+
         // Se é imagem, agenda próxima
-        if (!MediaFactory.isVideo(ad.file_path)) {
+        if (!isVideo) {
           var duration =
             (ad.transition_duration || CONFIG.defaultImageDuration) * 1000;
           state.nextTimeout = setTimeout(function () {
@@ -695,6 +707,12 @@
       }
     }
     clearCurrentMedia();
+
+    // Sem propaganda também não pode hibernar: garante o âncora tocando
+    if (typeof KeepAwake !== "undefined") {
+      KeepAwake.engage();
+    }
+
     console.log(LOG_PREFIX + " 🔭 Nenhuma propaganda disponível");
   }
 
@@ -974,6 +992,14 @@
       SleepPrevention.enable();
     } else {
       console.warn(LOG_PREFIX + " SleepPrevention não carregado");
+    }
+
+    // 5.1. Ativa keep-awake (vídeo-âncora + Wake Lock) — corrige o standby
+    //      durante as imagens em TVs modernas. Camada dupla.
+    if (typeof KeepAwake !== "undefined") {
+      KeepAwake.init();
+    } else {
+      console.warn(LOG_PREFIX + " KeepAwake não carregado");
     }
 
     // 6. Atalhos de teclado

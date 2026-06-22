@@ -518,6 +518,44 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: err.message });
 });
 
+// ============================================================================
+// HTTPS opcional (camada dupla: habilita a Wake Lock nativa nas TVs)
+// ----------------------------------------------------------------------------
+// Sobe LADO A LADO com o HTTP (sem redirect): TVs que não confiarem no
+// certificado continuam funcionando por HTTP — o vídeo-âncora mantém a tela
+// acordada de qualquer forma. Quem abrir por HTTPS ganha a Wake Lock de bônus.
+// O certificado é lido de ./certs (gere com: npm run gen-cert).
+// ============================================================================
+const HTTPS_PORT = process.env.HTTPS_PORT || 3443;
+
+function startHttpsIfAvailable(localIP) {
+  const https = require("https");
+  const certDir = path.join(__dirname, "certs");
+  const keyPath = path.join(certDir, "server.key");
+  const crtPath = path.join(certDir, "server.crt");
+
+  if (!fs.existsSync(keyPath) || !fs.existsSync(crtPath)) {
+    console.log(`ℹ️  HTTPS desativado: nenhum certificado em ./certs`);
+    console.log(`   A Wake Lock nativa só funciona em HTTPS. Habilite com:`);
+    console.log(`   npm run gen-cert\n`);
+    return;
+  }
+
+  try {
+    const options = {
+      key: fs.readFileSync(keyPath),
+      cert: fs.readFileSync(crtPath),
+    };
+    https.createServer(options, app).listen(HTTPS_PORT, "0.0.0.0", () => {
+      console.log(`🔒 HTTPS: https://${localIP}:${HTTPS_PORT}`);
+      console.log(`   (abra os apresentadores por HTTPS para ativar a Wake Lock)\n`);
+    });
+  } catch (err) {
+    console.error(`⚠️  Falha ao iniciar HTTPS: ${err.message}`);
+    console.log(`   Seguindo só em HTTP (o vídeo-âncora mantém as TVs acordadas).\n`);
+  }
+}
+
 initDatabase().then(() => {
   const localIP = getLocalIPAddress();
   const allIPs = getAllIPAddresses();
@@ -532,5 +570,7 @@ initDatabase().then(() => {
       console.log(`  ${interfaceName}: ${ips.join(", ")}`);
     }
     console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+
+    startHttpsIfAvailable(localIP);
   });
 });

@@ -17,6 +17,22 @@ body {
   -ms-overflow-style: none;
 }
 
+/* Vídeo-âncora keep-awake (fica ATRÁS de tudo, sempre decodificando).
+   NÃO usar display:none / opacity:0 / 1px — TVs podem parar de decodificar
+   e o painel volta a hibernar. Como é preto e fica atrás, é imperceptível. */
+#keep-awake-anchor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+  z-index: 0;
+  pointer-events: none;
+  border: 0;
+}
+
 /* Container principal */
 #presenter-container {
   position: fixed;
@@ -25,6 +41,7 @@ body {
   width: 100vw;
   height: 100vh;
   background: #000;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;

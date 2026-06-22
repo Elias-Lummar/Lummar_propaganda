@@ -1,0 +1,10 @@
+# Dependências
+node_modules/
+
+# Certificados TLS (gerados localmente, nunca versionados)
+certs/
+
+# Logs e temporários
+*.log
+.DS_Store
+Thumbs.db
