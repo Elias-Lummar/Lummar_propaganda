@@ -4,11 +4,68 @@
   var currentPanel = "presenter"; // Painel atualmente selecionado
   var allAds = []; // Cache de todas as propagandas
   var orderChanged = false; // Flag para indicar mudança na ordem
+  var isReordering = false; // Flag para indicar se está em modo reorder/drag-and-drop
+  var lastMovedAdId = null; // ID do último item movido (para highlight visual)
+  var dragSrcId = null; // ID do item sendo arrastado no drag-and-drop
+  var isDragFromHandle = false; // true se o drag iniciou a partir do handle
 
   // Variáveis de paginação
   var currentPage = 1;
   var itemsPerPage = 50;
   var filteredAdsCache = [];
+
+  // Auto-refresh
+  var AUTO_REFRESH_DELAY = 2; // segundos entre cada atualização automática
+  var autoRefreshCountdown = 0;
+  var countdownTimerId = null;
+
+  function updateRefreshCountdown(seconds) {
+    var badge = document.getElementById("autoRefreshCountdown");
+    if (badge) badge.textContent = seconds + "s";
+  }
+
+  function stopAutoRefresh() {
+    if (countdownTimerId) {
+      clearInterval(countdownTimerId);
+      countdownTimerId = null;
+    }
+    // Mostrar ⏸ no badge se está em modo reorder
+    var badge = document.getElementById("autoRefreshCountdown");
+    if (badge) {
+      if (isReordering) {
+        badge.textContent = "⏸";
+        badge.style.display = "inline";
+        badge.title = "Auto-refresh pausado durante reordenação";
+      }
+    }
+  }
+
+  function startAutoRefresh() {
+    // Não inicia auto-refresh se está em modo reorder
+    if (isReordering) return;
+
+    // Restaurar badge ao estado normal
+    var badge = document.getElementById("autoRefreshCountdown");
+    if (badge) {
+      badge.title = "Próxima atualização automática";
+      badge.style.display = "inline";
+    }
+
+    stopAutoRefresh();
+    autoRefreshCountdown = AUTO_REFRESH_DELAY;
+    updateRefreshCountdown(autoRefreshCountdown);
+    countdownTimerId = setInterval(function () {
+      autoRefreshCountdown--;
+      updateRefreshCountdown(autoRefreshCountdown);
+      if (autoRefreshCountdown <= 0) {
+        stopAutoRefresh();
+        // Verifica novamente se não entrou em reorder enquanto aguardava
+        if (!isReordering) {
+          loadAds();
+        }
+      }
+    }, 1000);
+  }
 
   function bindEvents() {
     document.getElementById("adForm").addEventListener("submit", function (e) {
@@ -22,6 +79,48 @@
       });
     document.getElementById("file").addEventListener("change", function (e) {
       handleFileSelect(e);
+    });
+
+    // Rastreia se o drag iniciou a partir do handle (registrado uma única vez)
+    document.addEventListener("mousedown", function (e) {
+      isDragFromHandle = !!(
+        e.target.closest && e.target.closest(".drag-handle")
+      );
+    });
+
+    // Auto-scroll durante drag: rola a página quando o cursor se aproxima das bordas
+    var scrollTimer = null;
+    document.addEventListener("dragover", function (e) {
+      if (dragSrcId === null) return;
+
+      if (scrollTimer) {
+        clearInterval(scrollTimer);
+        scrollTimer = null;
+      }
+
+      var ZONE = 120; // px a partir das bordas para ativar o scroll
+      var y = e.clientY;
+      var vh = window.innerHeight;
+      var speed = 0;
+
+      if (y < ZONE) {
+        speed = -Math.round(12 * (1 - y / ZONE)); // mais rápido quanto mais perto do topo
+      } else if (y > vh - ZONE) {
+        speed = Math.round(12 * (1 - (vh - y) / ZONE)); // mais rápido quanto mais perto do rodapé
+      }
+
+      if (speed !== 0) {
+        scrollTimer = setInterval(function () {
+          window.scrollBy({ top: speed, behavior: "instant" });
+        }, 16);
+      }
+    });
+
+    document.addEventListener("dragend", function () {
+      if (scrollTimer) {
+        clearInterval(scrollTimer);
+        scrollTimer = null;
+      }
     });
   }
 
@@ -117,6 +216,141 @@
       });
   }
 
+  // ========================================================================
+  // Upload com progresso via XMLHttpRequest
+  // ========================================================================
+  function uploadFileWithProgress(file) {
+    return new Promise(function (resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      var formData = new FormData();
+      formData.append("file", file);
+
+      // Criar/mostrar overlay de progresso
+      showUploadOverlay(file.name, file.size);
+
+      xhr.upload.addEventListener("progress", function (e) {
+        if (e.lengthComputable) {
+          var percent = Math.round((e.loaded / e.total) * 100);
+          updateUploadProgress(percent, e.loaded, e.total);
+        }
+      });
+
+      xhr.addEventListener("load", function () {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          updateUploadProgress(100, file.size, file.size, "Processando...");
+          try {
+            var result = JSON.parse(xhr.responseText);
+            setTimeout(function () {
+              hideUploadOverlay();
+            }, 400);
+            resolve(result);
+          } catch (e) {
+            hideUploadOverlay();
+            reject(new Error("Resposta inválida do servidor"));
+          }
+        } else {
+          hideUploadOverlay();
+          try {
+            var errData = JSON.parse(xhr.responseText);
+            reject(
+              new Error(
+                errData.error || "Erro no upload (HTTP " + xhr.status + ")",
+              ),
+            );
+          } catch (e) {
+            reject(
+              new Error("Erro no upload do arquivo (HTTP " + xhr.status + ")"),
+            );
+          }
+        }
+      });
+
+      xhr.addEventListener("error", function () {
+        hideUploadOverlay();
+        reject(new Error("Falha na conexão durante o upload"));
+      });
+
+      xhr.addEventListener("abort", function () {
+        hideUploadOverlay();
+        reject(new Error("Upload cancelado"));
+      });
+
+      xhr.addEventListener("timeout", function () {
+        hideUploadOverlay();
+        reject(new Error("Upload expirou (timeout)"));
+      });
+
+      xhr.timeout = 10 * 60 * 1000; // 10 minutos
+      xhr.open("POST", "/api/upload", true);
+      xhr.send(formData);
+    });
+  }
+
+  function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    if (bytes < 1024 * 1024 * 1024)
+      return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+    return (bytes / (1024 * 1024 * 1024)).toFixed(2) + " GB";
+  }
+
+  function showUploadOverlay(fileName, fileSize) {
+    // Remover se já existe
+    var existing = document.getElementById("uploadOverlay");
+    if (existing) existing.remove();
+
+    var overlay = document.createElement("div");
+    overlay.id = "uploadOverlay";
+    overlay.style.cssText =
+      "position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);";
+
+    overlay.innerHTML =
+      '<div style="background:#1a1a2e;border:1px solid #333;border-radius:16px;padding:32px 40px;min-width:400px;max-width:500px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+      '<div style="font-size:48px;margin-bottom:16px;">📤</div>' +
+      '<h3 style="color:#fff;margin:0 0 6px;font-size:18px;">Enviando arquivo...</h3>' +
+      '<p style="color:#888;font-size:13px;margin:0 0 20px;word-break:break-all;" id="uploadFileName">' +
+      fileName +
+      " (" +
+      formatFileSize(fileSize) +
+      ")</p>" +
+      '<div style="background:#2a2a3e;border-radius:10px;height:24px;overflow:hidden;margin-bottom:12px;position:relative;">' +
+      '<div id="uploadProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#4a6cf7,#6a8fff);border-radius:10px;transition:width 0.3s ease;position:relative;">' +
+      '<div style="position:absolute;right:0;top:0;bottom:0;width:40px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.15));border-radius:0 10px 10px 0;animation:uploadShimmer 1.5s infinite;"></div>' +
+      "</div>" +
+      "</div>" +
+      '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+      '<span id="uploadProgressText" style="color:#6a8fff;font-weight:700;font-size:16px;">0%</span>' +
+      '<span id="uploadProgressDetail" style="color:#666;font-size:12px;">Iniciando...</span>' +
+      "</div>" +
+      "<style>@keyframes uploadShimmer{0%{opacity:0.3}50%{opacity:1}100%{opacity:0.3}}</style>" +
+      "</div>";
+
+    document.body.appendChild(overlay);
+  }
+
+  function updateUploadProgress(percent, loaded, total, statusText) {
+    var bar = document.getElementById("uploadProgressBar");
+    var text = document.getElementById("uploadProgressText");
+    var detail = document.getElementById("uploadProgressDetail");
+    if (bar) bar.style.width = percent + "%";
+    if (text) text.textContent = percent + "%";
+    if (detail) {
+      detail.textContent =
+        statusText || formatFileSize(loaded) + " / " + formatFileSize(total);
+    }
+  }
+
+  function hideUploadOverlay() {
+    var overlay = document.getElementById("uploadOverlay");
+    if (overlay) {
+      overlay.style.transition = "opacity 0.3s";
+      overlay.style.opacity = "0";
+      setTimeout(function () {
+        overlay.remove();
+      }, 300);
+    }
+  }
+
   function processSaveAd(
     fileInput,
     title,
@@ -128,26 +362,28 @@
   ) {
     var filePath = "";
     var uploadPromise;
+
+    // Desabilitar botão de submit durante o processo
+    var submitBtn = document.querySelector('#adForm button[type="submit"]');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML =
+        '<i class="fas fa-spinner fa-spin me-1"></i>Enviando...';
+    }
+
     if (fileInput.files[0]) {
-      var uploadData = new FormData();
-      uploadData.append("file", fileInput.files[0]);
-      uploadPromise = fetch("/api/upload", {
-        method: "POST",
-        body: uploadData,
-      })
-        .then(function (uploadResponse) {
-          if (!uploadResponse.ok) throw new Error("Erro no upload do arquivo");
-          return uploadResponse.json();
-        })
-        .then(function (uploadResult) {
+      uploadPromise = uploadFileWithProgress(fileInput.files[0]).then(
+        function (uploadResult) {
           filePath = uploadResult.file_path;
-        });
+        },
+      );
     } else if (currentEditId) {
       uploadPromise = getAdById(currentEditId).then(function (existingAd) {
         filePath = existingAd.file_path;
       });
     } else {
       showAlert("Por favor, selecione um arquivo!", "danger");
+      resetSubmitButton(submitBtn);
       return;
     }
 
@@ -172,7 +408,11 @@
           body: JSON.stringify(adData),
         })
           .then(function (response) {
-            if (!response.ok) throw new Error("Erro ao salvar propaganda");
+            if (!response.ok) {
+              return response.json().then(function (errData) {
+                throw new Error(errData.error || "Erro ao salvar propaganda");
+              });
+            }
             return response.json();
           })
           .then(function (result) {
@@ -187,11 +427,25 @@
           })
           .catch(function (error) {
             showAlert("Erro: " + error.message, "danger");
+          })
+          .finally(function () {
+            resetSubmitButton(submitBtn);
           });
       })
       .catch(function (error) {
         showAlert("Erro: " + error.message, "danger");
+        resetSubmitButton(submitBtn);
       });
+  }
+
+  function resetSubmitButton(btn) {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML =
+        '<i class="fas fa-save me-1"></i><span id="submitText">' +
+        (currentEditId ? "Atualizar Propaganda" : "Salvar Propaganda") +
+        "</span>";
+    }
   }
 
   function getAdById(id) {
@@ -218,8 +472,8 @@
         event.target.value = "";
         return;
       }
-      if (file.size > 100 * 1024 * 1024) {
-        showAlert("O arquivo é muito grande! Tamanho máximo: 100MB", "danger");
+      if (file.size > 1024 * 1024 * 1024) {
+        showAlert("O arquivo é muito grande! Tamanho máximo: 1GB", "danger");
         event.target.value = "";
         return;
       }
@@ -227,6 +481,13 @@
   }
 
   function loadAds() {
+    // Não recarrega enquanto o usuário está reordenando
+    if (isReordering) return;
+
+    stopAutoRefresh();
+    var refreshIcon = document.querySelector("#refreshBtn .fa-sync-alt");
+    if (refreshIcon) refreshIcon.classList.add("fa-spin");
+
     fetch("/api/ads")
       .then(function (response) {
         if (!response.ok) throw new Error("Erro ao carregar propagandas");
@@ -236,14 +497,18 @@
         allAds = ads;
         createPanelTabs();
         renderAdsTable(currentPanel);
+        if (refreshIcon) refreshIcon.classList.remove("fa-spin");
+        startAutoRefresh();
       })
       .catch(function (error) {
         console.log("Erro ao carregar propagandas: " + error.message);
         var tbody = document.getElementById("adsTableBody");
         if (tbody) {
           tbody.innerHTML =
-            '<tr><td colspan="7" class="text-center text-danger">Erro ao carregar propagandas</td></tr>';
+            '<tr><td colspan="9" class="text-center text-danger">Erro ao carregar propagandas</td></tr>';
         }
+        if (refreshIcon) refreshIcon.classList.remove("fa-spin");
+        startAutoRefresh();
       });
   }
 
@@ -295,17 +560,25 @@
     var tbody = document.getElementById("adsTableBody");
     if (!tbody) return;
 
-    // Filtrar propagandas pelo painel selecionado e ordenar por display_order
+    // Filtrar propagandas pelo painel selecionado e ordenar por display_order da tela específica
     filteredAdsCache = allAds.filter(function (ad) {
       return ad.screens && ad.screens.indexOf(panelFilter) !== -1;
     });
     filteredAdsCache.sort(function (a, b) {
-      return (a.display_order || 0) - (b.display_order || 0);
+      var orderA =
+        a.screen_orders && a.screen_orders[panelFilter] !== undefined
+          ? a.screen_orders[panelFilter]
+          : a.display_order || 0;
+      var orderB =
+        b.screen_orders && b.screen_orders[panelFilter] !== undefined
+          ? b.screen_orders[panelFilter]
+          : b.display_order || 0;
+      return orderA - orderB;
     });
 
     if (filteredAdsCache.length === 0) {
       tbody.innerHTML =
-        '<tr><td colspan="8" class="text-center text-muted"><i class="fas fa-inbox me-2"></i>Nenhuma propaganda cadastrada para este painel</td></tr>';
+        '<tr><td colspan="9" class="text-center text-muted"><i class="fas fa-inbox me-2"></i>Nenhuma propaganda cadastrada para este painel</td></tr>';
       updatePagination();
       return;
     }
@@ -331,10 +604,17 @@
       var isVideo =
         ad.file_path && ad.file_path.match(/\.(mp4|avi|mov|webm)$/i);
 
+      var isMoving = isReordering && ad.id === lastMovedAdId;
       rows +=
         '<tr data-ad-id="' +
         ad.id +
-        '">' +
+        '" draggable="true"' +
+        (isMoving ? ' class="tr-moving"' : "") +
+        ">" +
+        '<td class="drag-handle" title="Arraste para reordenar"><i class="fas fa-grip-vertical"></i></td>' +
+        '<td><span class="badge bg-secondary">' +
+        (globalIndex + 1) +
+        "</span></td>" +
         "<td>" +
         ad.id +
         "</td>" +
@@ -395,6 +675,7 @@
         "</tr>";
     }
     tbody.innerHTML = rows;
+    bindDragEvents(tbody);
 
     // Atualizar paginação
     updatePagination();
@@ -484,6 +765,11 @@
   // Movimentação de Itens (Ordem)
   // ========================================================================
   window.moveAdUp = function (adId) {
+    // Ativar modo reorder para pausar auto-refresh
+    isReordering = true;
+    lastMovedAdId = adId;
+    stopAutoRefresh();
+
     // Encontrar no filteredAdsCache para saber vizinho
     var filtIdx = -1;
     for (var i = 0; i < filteredAdsCache.length; i++) {
@@ -494,26 +780,13 @@
     }
     if (filtIdx <= 0) return; // Já é o primeiro
 
-    var movingAd = filteredAdsCache[filtIdx];
-    var targetAd = filteredAdsCache[filtIdx - 1];
+    // Trocar posições no array
+    var temp = filteredAdsCache[filtIdx];
+    filteredAdsCache[filtIdx] = filteredAdsCache[filtIdx - 1];
+    filteredAdsCache[filtIdx - 1] = temp;
 
-    // Trocar display_order entre os dois
-    var tempOrder = movingAd.display_order;
-    movingAd.display_order = targetAd.display_order;
-    targetAd.display_order = tempOrder;
-
-    // Atualizar no allAds também
-    for (var j = 0; j < allAds.length; j++) {
-      if (allAds[j].id === movingAd.id)
-        allAds[j].display_order = movingAd.display_order;
-      if (allAds[j].id === targetAd.id)
-        allAds[j].display_order = targetAd.display_order;
-    }
-
-    // Ordenar allAds por display_order para que o filtro preserve a ordem
-    allAds.sort(function (a, b) {
-      return a.display_order - b.display_order;
-    });
+    // Reatribuir display_order sequencial a todos os itens filtrados
+    reassignDisplayOrder();
 
     // Re-renderizar e mostrar botão salvar
     renderAdsTable(currentPanel);
@@ -521,6 +794,11 @@
   };
 
   window.moveAdDown = function (adId) {
+    // Ativar modo reorder para pausar auto-refresh
+    isReordering = true;
+    lastMovedAdId = adId;
+    stopAutoRefresh();
+
     // Encontrar no filteredAdsCache para saber vizinho
     var filtIdx = -1;
     for (var i = 0; i < filteredAdsCache.length; i++) {
@@ -531,31 +809,154 @@
     }
     if (filtIdx < 0 || filtIdx >= filteredAdsCache.length - 1) return; // Já é o último
 
-    var movingAd = filteredAdsCache[filtIdx];
-    var targetAd = filteredAdsCache[filtIdx + 1];
+    // Trocar posições no array
+    var temp = filteredAdsCache[filtIdx];
+    filteredAdsCache[filtIdx] = filteredAdsCache[filtIdx + 1];
+    filteredAdsCache[filtIdx + 1] = temp;
 
-    // Trocar display_order entre os dois
-    var tempOrder = movingAd.display_order;
-    movingAd.display_order = targetAd.display_order;
-    targetAd.display_order = tempOrder;
-
-    // Atualizar no allAds também
-    for (var j = 0; j < allAds.length; j++) {
-      if (allAds[j].id === movingAd.id)
-        allAds[j].display_order = movingAd.display_order;
-      if (allAds[j].id === targetAd.id)
-        allAds[j].display_order = targetAd.display_order;
-    }
-
-    // Ordenar allAds por display_order para que o filtro preserve a ordem
-    allAds.sort(function (a, b) {
-      return a.display_order - b.display_order;
-    });
+    // Reatribuir display_order sequencial a todos os itens filtrados
+    reassignDisplayOrder();
 
     // Re-renderizar e mostrar botão salvar
     renderAdsTable(currentPanel);
     markOrderChanged();
   };
+
+  // Reatribui display_order sequencial (1,2,3...) apenas para a tela atual após troca de posição
+  function reassignDisplayOrder() {
+    for (var i = 0; i < filteredAdsCache.length; i++) {
+      if (!filteredAdsCache[i].screen_orders)
+        filteredAdsCache[i].screen_orders = {};
+      filteredAdsCache[i].screen_orders[currentPanel] = i + 1;
+      // Sincronizar no allAds
+      for (var j = 0; j < allAds.length; j++) {
+        if (allAds[j].id === filteredAdsCache[i].id) {
+          if (!allAds[j].screen_orders) allAds[j].screen_orders = {};
+          allAds[j].screen_orders[currentPanel] = i + 1;
+          break;
+        }
+      }
+    }
+  }
+
+  // ========================================================================
+  // Drag and Drop — reordenação por arrastar
+  // ========================================================================
+  function bindDragEvents(tbody) {
+    var rows = tbody.querySelectorAll("tr[data-ad-id]");
+
+    rows.forEach(function (row) {
+      // ── dragstart ──────────────────────────────────────────────────────
+      row.addEventListener("dragstart", function (e) {
+        if (!isDragFromHandle) {
+          e.preventDefault();
+          return;
+        }
+        dragSrcId = parseInt(row.getAttribute("data-ad-id"), 10);
+        lastMovedAdId = dragSrcId;
+        isReordering = true;
+        stopAutoRefresh();
+
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", String(dragSrcId));
+
+        // setTimeout: browser captura a aparência original antes de tornar a linha transparente
+        setTimeout(function () {
+          if (row.parentElement) row.classList.add("tr-dragging");
+        }, 0);
+      });
+
+      // ── dragend ────────────────────────────────────────────────────────
+      row.addEventListener("dragend", function () {
+        dragSrcId = null;
+        tbody.querySelectorAll("tr").forEach(function (r) {
+          r.classList.remove(
+            "tr-dragging",
+            "tr-drag-over-above",
+            "tr-drag-over-below",
+          );
+        });
+      });
+
+      // ── dragover ───────────────────────────────────────────────────────
+      row.addEventListener("dragover", function (e) {
+        if (dragSrcId === null) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+
+        var targetId = parseInt(row.getAttribute("data-ad-id"), 10);
+        if (targetId === dragSrcId) return;
+
+        // Remover indicadores anteriores de todas as linhas
+        tbody.querySelectorAll("tr").forEach(function (r) {
+          r.classList.remove("tr-drag-over-above", "tr-drag-over-below");
+        });
+
+        // Mostrar indicador acima ou abaixo do ponto médio da linha
+        var rect = row.getBoundingClientRect();
+        if (e.clientY < rect.top + rect.height / 2) {
+          row.classList.add("tr-drag-over-above");
+        } else {
+          row.classList.add("tr-drag-over-below");
+        }
+      });
+
+      // ── dragleave ──────────────────────────────────────────────────────
+      row.addEventListener("dragleave", function (e) {
+        // Só remove se o cursor saiu da linha (não para um filho interno)
+        if (!row.contains(e.relatedTarget)) {
+          row.classList.remove("tr-drag-over-above", "tr-drag-over-below");
+        }
+      });
+
+      // ── drop ───────────────────────────────────────────────────────────
+      row.addEventListener("drop", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (dragSrcId === null) return;
+
+        var targetId = parseInt(row.getAttribute("data-ad-id"), 10);
+        if (targetId === dragSrcId) return;
+
+        // Posição de inserção: acima ou abaixo do ponto médio
+        var rect = row.getBoundingClientRect();
+        var insertBefore = e.clientY < rect.top + rect.height / 2;
+
+        // Encontrar índices no filteredAdsCache
+        var srcIdx = -1;
+        var tgtIdx = -1;
+        for (var i = 0; i < filteredAdsCache.length; i++) {
+          if (filteredAdsCache[i].id === dragSrcId) srcIdx = i;
+          if (filteredAdsCache[i].id === targetId) tgtIdx = i;
+        }
+        if (srcIdx === -1 || tgtIdx === -1) return;
+
+        // Remover item de origem do array
+        var item = filteredAdsCache.splice(srcIdx, 1)[0];
+
+        // Encontrar novo índice do alvo após remoção
+        var newTgtIdx = -1;
+        for (var i = 0; i < filteredAdsCache.length; i++) {
+          if (filteredAdsCache[i].id === targetId) {
+            newTgtIdx = i;
+            break;
+          }
+        }
+        if (newTgtIdx === -1) return;
+
+        // Inserir na posição correta
+        filteredAdsCache.splice(
+          insertBefore ? newTgtIdx : newTgtIdx + 1,
+          0,
+          item,
+        );
+
+        reassignDisplayOrder();
+        renderAdsTable(currentPanel);
+        markOrderChanged();
+      });
+    });
+  }
 
   function markOrderChanged() {
     orderChanged = true;
@@ -567,19 +968,19 @@
   }
 
   function saveOrderToServer() {
-    // Envia TODAS as ordens do filteredAdsCache atual
+    // Envia as ordens do filteredAdsCache atual para a tela específica
     var orders = [];
     for (var i = 0; i < filteredAdsCache.length; i++) {
       orders.push({
         id: filteredAdsCache[i].id,
-        order: filteredAdsCache[i].display_order,
+        order: i + 1,
       });
     }
 
     fetch("/api/ads/reorder", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ orders: orders }),
+      body: JSON.stringify({ orders: orders, screen: currentPanel }),
     })
       .then(function (response) {
         if (!response.ok) throw new Error("Erro ao salvar ordem");
@@ -599,7 +1000,7 @@
     for (var i = 0; i < filteredAdsCache.length; i++) {
       orders.push({
         id: filteredAdsCache[i].id,
-        order: filteredAdsCache[i].display_order,
+        order: i + 1,
       });
     }
 
@@ -612,7 +1013,7 @@
     fetch("/api/ads/reorder", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ orders: orders }),
+      body: JSON.stringify({ orders: orders, screen: currentPanel }),
     })
       .then(function (response) {
         if (!response.ok) throw new Error("Erro ao salvar ordem");
@@ -624,21 +1025,26 @@
           "success",
         );
         orderChanged = false;
+        isReordering = false; // Sair do modo reorder
+        lastMovedAdId = null; // Limpar highlight
         if (btn) {
           btn.classList.remove("btn-pulse");
           btn.style.display = "none";
           btn.disabled = false;
           btn.innerHTML = '<i class="fas fa-save me-1"></i>Salvar Ordem';
         }
-        // Recarrega para sincronizar com o servidor
+        // Recarrega para sincronizar com o servidor e reinicia auto-refresh
         loadAds();
       })
       .catch(function (error) {
         showAlert("Erro ao salvar ordem: " + error.message, "danger");
+        isReordering = false; // Sair do modo reorder mesmo em caso de erro
+        lastMovedAdId = null; // Limpar highlight
         if (btn) {
           btn.disabled = false;
           btn.innerHTML = '<i class="fas fa-save me-1"></i>Salvar Ordem';
         }
+        startAutoRefresh(); // Retomar auto-refresh mesmo em caso de erro
       });
   };
 
@@ -711,11 +1117,26 @@
   };
 
   window.deleteAd = function (id) {
-    if (!confirm("Tem certeza que deseja excluir esta propaganda?")) return;
-    fetch("/api/ads/" + id, { method: "DELETE" })
+    if (!confirm("Tem certeza que deseja excluir esta propaganda desta tela?"))
+      return;
+
+    // Enviar a tela atual junto com o request de exclusão
+    fetch("/api/ads/" + id + "?screen=" + encodeURIComponent(currentPanel), {
+      method: "DELETE",
+    })
       .then(function (response) {
         if (!response.ok) throw new Error("Erro ao excluir propaganda");
-        showAlert("Propaganda excluída com sucesso!", "success");
+        return response.json();
+      })
+      .then(function (data) {
+        if (data.deleted) {
+          showAlert(
+            "Propaganda excluída completamente (nenhuma tela restante)!",
+            "success",
+          );
+        } else {
+          showAlert("Propaganda removida desta tela com sucesso!", "success");
+        }
         loadAds();
       })
       .catch(function (error) {

@@ -597,3 +597,113 @@ tbody.drag-active {
   color: #495057 !important;
   opacity: 0.6;
 }
+
+/* Linha em reordenação */
+.tr-moving {
+  background-color: #1a3a2a !important;
+  border-left: 4px solid #28a745 !important;
+  box-shadow: inset 0 0 0 1px rgba(40, 167, 69, 0.4);
+  animation: pulse-moving 1s ease-in-out infinite;
+}
+
+.tr-moving td {
+  color: #a3ffb0 !important;
+}
+
+.tr-moving td strong {
+  color: #5dfc82 !important;
+}
+
+@keyframes pulse-moving {
+  0% {
+    background-color: #1a3a2a;
+  }
+  50% {
+    background-color: #1f4a33;
+  }
+  100% {
+    background-color: #1a3a2a;
+  }
+}
+
+/* ── Drag handle ─────────────────────────────────────────── */
+.drag-handle {
+  cursor: grab;
+  text-align: center;
+  padding: 0.4rem 0.5rem !important;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.drag-handle i {
+  font-size: 0.95rem;
+  color: #6c757d;
+  opacity: 0.45;
+  transition:
+    opacity 0.15s ease,
+    color 0.15s ease;
+  pointer-events: none;
+}
+
+tr:hover .drag-handle i {
+  opacity: 1;
+  color: #adb5bd;
+}
+
+/* ── Linha sendo arrastada ───────────────────────────────── */
+.tr-dragging {
+  opacity: 0.35 !important;
+}
+
+.tr-dragging td {
+  background-color: #111315 !important;
+}
+
+/* ── Indicador de drop ───────────────────────────────────── */
+.tr-drag-over-above td {
+  border-top: 3px solid #3d8bfd !important;
+  background-color: rgba(61, 139, 253, 0.12) !important;
+  box-shadow: inset 0 4px 8px rgba(61, 139, 253, 0.18);
+}
+
+.tr-drag-over-above td:first-child::before {
+  content: "►";
+  position: absolute;
+  left: -6px;
+  color: #3d8bfd;
+  font-size: 0.65rem;
+  line-height: 1;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.tr-drag-over-above td:first-child {
+  position: relative;
+}
+
+.tr-drag-over-below td {
+  border-bottom: 3px solid #3d8bfd !important;
+  background-color: rgba(61, 139, 253, 0.12) !important;
+  box-shadow: inset 0 -4px 8px rgba(61, 139, 253, 0.18);
+}
+
+.tr-drag-over-below td:first-child::after {
+  content: "►";
+  position: absolute;
+  left: -6px;
+  color: #3d8bfd;
+  font-size: 0.65rem;
+  line-height: 1;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.tr-drag-over-below td:first-child {
+  position: relative;
+}

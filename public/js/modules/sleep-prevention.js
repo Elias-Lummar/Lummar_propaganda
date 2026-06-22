@@ -746,9 +746,7 @@ var SleepPrevention = (function () {
       if (videoFallbackEl) {
         try {
           videoFallbackEl.pause();
-          if (videoFallbackEl.parentNode) {
-            videoFallbackEl.parentNode.removeChild(videoFallbackEl);
-          }
+          videoFallbackEl.remove();
         } catch (e) {
           /* */
         }
@@ -784,8 +782,8 @@ var SleepPrevention = (function () {
       // Remove repaint element
       try {
         var repaintEl = document.getElementById("sleep-prevention-repaint");
-        if (repaintEl && repaintEl.parentNode) {
-          repaintEl.parentNode.removeChild(repaintEl);
+        if (repaintEl) {
+          repaintEl.remove();
         }
       } catch (e) {
         /* */

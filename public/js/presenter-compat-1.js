@@ -1,6 +1,20 @@
 // JS compatível para navegadores antigos
 window.onload = function () {
 
+    // --- TELA CHEIA AUTOMÁTICA ---
+    (function () {
+        var el = document.documentElement;
+        if (el.requestFullscreen) {
+            el.requestFullscreen();
+        } else if (el.webkitRequestFullscreen) {
+            el.webkitRequestFullscreen();
+        } else if (el.mozRequestFullScreen) {
+            el.mozRequestFullScreen();
+        } else if (el.msRequestFullscreen) {
+            el.msRequestFullscreen();
+        }
+    })();
+
     // --- PREVENIR HIBERNAÇÃO DA TELA ---
     var isPreventingSleep = false;
     var sleepInterval = null;

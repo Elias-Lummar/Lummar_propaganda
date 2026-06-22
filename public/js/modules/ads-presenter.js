@@ -809,227 +809,36 @@
   }
 
   /**
-   * Configura o overlay com os botões de iniciar.
-   * - No Electron, esconde automaticamente (já roda em kiosk).
-   * - No browser, mostra dois botões:
-   *   1. Tela Cheia — fullscreen + SleepPrevention (apresentador atual)
-   *   2. Selecionar Apresentador — mostra picker inline para escolher qual tela
+   * Entra em tela cheia automaticamente ao carregar a página.
+   * O overlay é ocultado imediatamente; não há botão de confirmação.
    */
   function setupFullscreenOverlay() {
     var overlay = document.getElementById("electron-init-overlay");
-    var btnFullscreen = document.getElementById("electron-init-btn");
-    var btnSelect = document.getElementById("presenter-select-btn");
-    var statusEl = document.getElementById("overlay-status");
-    var pickerEl = document.getElementById("presenter-picker");
-    var pickerCards = document.getElementById("picker-cards");
-    var pickerBackBtn = document.getElementById("picker-back-btn");
-    var overlayButtons = overlay
-      ? overlay.querySelector(".overlay-buttons")
-      : null;
-    var overlayLogo = overlay ? overlay.querySelector(".overlay-logo") : null;
 
-    if (!overlay) return;
-
-    // Se estiver no Electron, esconde o overlay imediatamente
-    if (isElectron()) {
+    // Oculta o overlay (se existir)
+    if (overlay) {
       overlay.style.display = "none";
-      console.log(LOG_PREFIX + " Electron detectado – overlay oculto");
+    }
+
+    // No Electron o kiosk já cuida do fullscreen
+    if (isElectron()) {
+      console.log(LOG_PREFIX + " Electron detectado – fullscreen gerenciado pelo kiosk");
       return;
     }
 
-    // Lista de apresentadores disponíveis
-    var PRESENTERS = [
-      {
-        file: "presenter.html",
-        label: "Padrão",
-        icon: "📺",
-        desc: "Layout principal",
-        badge: "Padrão",
-      },
-      {
-        file: "presenter1.html",
-        label: "Painel 1",
-        icon: "🖥️",
-        desc: "Tela 1",
-        badge: null,
-      },
-      {
-        file: "presenter2.html",
-        label: "Painel 2",
-        icon: "🖥️",
-        desc: "Tela 2",
-        badge: null,
-      },
-      {
-        file: "presenter3.html",
-        label: "Painel 3",
-        icon: "🖥️",
-        desc: "Tela 3",
-        badge: null,
-      },
-      {
-        file: "presenter4.html",
-        label: "Painel 4",
-        icon: "🖥️",
-        desc: "Tela 4",
-        badge: null,
-      },
-    ];
+    // Tenta entrar em fullscreen imediatamente
+    requestFullscreen();
 
-    // ── Botão 1: Tela Cheia no browser (apresentador atual) ──
-    if (btnFullscreen) {
-      btnFullscreen.onclick = function () {
-        console.log(LOG_PREFIX + " ▶️ Inicializando em tela cheia");
-
-        // 1. Entra em fullscreen
-        requestFullscreen();
-
-        // 2. Ativa prevenção de hibernação (precisa de gesto do usuário)
-        if (typeof SleepPrevention !== "undefined") {
-          SleepPrevention.enable();
-          console.log(
-            LOG_PREFIX + " ✓ SleepPrevention ativado via gesto do usuário",
-          );
-        }
-
-        // 3. Esconde o overlay com animação
-        overlay.className += " hidden";
-        setTimeout(function () {
-          overlay.style.display = "none";
-        }, 600);
-
-        // 4. Esconde cursor após inatividade
-        setupCursorAutoHide();
-      };
+    // Ativa prevenção de hibernação
+    if (typeof SleepPrevention !== "undefined") {
+      SleepPrevention.enable();
+      console.log(LOG_PREFIX + " ✓ SleepPrevention ativado");
     }
 
-    // ── Botão 2: Selecionar Apresentador (abre Electron com picker) ──
-    if (btnSelect && pickerEl && pickerCards) {
-      // Gera os cards do picker
-      pickerCards.innerHTML = "";
-      for (var _pi = 0; _pi < PRESENTERS.length; _pi++) {
-        (function (p) {
-          var card = document.createElement("div");
-          card.className = "picker-card";
+    // Esconde cursor após inatividade
+    setupCursorAutoHide();
 
-          var badgeHtml = p.badge
-            ? '<div class="picker-badge">' + p.badge + "</div>"
-            : "";
-
-          card.innerHTML =
-            badgeHtml +
-            '<div class="picker-card-icon">' +
-            p.icon +
-            "</div>" +
-            '<h3 class="picker-card-title">' +
-            p.label +
-            "</h3>" +
-            '<p class="picker-card-desc">' +
-            p.desc +
-            "</p>";
-
-          card.addEventListener("click", function () {
-            console.log(LOG_PREFIX + " 🖥️ Lançando Electron com: " + p.label);
-
-            if (statusEl) {
-              statusEl.textContent =
-                "Iniciando Electron com " + p.label + "...";
-              statusEl.className = "overlay-status";
-            }
-
-            // Chama a API para lançar o Electron com o presenter escolhido
-            var apiUrl =
-              (CONFIG.apiHost || detectApiHost()) + "/api/launch-electron";
-
-            xhrPost(
-              apiUrl,
-              { presenter: p.file },
-              10000,
-              function (data) {
-                if (data && data.success) {
-                  if (statusEl) {
-                    statusEl.textContent =
-                      "✓ Electron aberto com " +
-                      p.label +
-                      "! Pode fechar esta aba.";
-                    statusEl.className = "overlay-status success";
-                  }
-                  console.log(
-                    LOG_PREFIX + " ✓ Electron lançado (PID: " + data.pid + ")",
-                  );
-                } else {
-                  var msg =
-                    data && data.message ? data.message : "Erro desconhecido";
-                  if (statusEl) {
-                    statusEl.textContent = msg;
-                    statusEl.className = "overlay-status error";
-                  }
-                }
-              },
-              function (errorMsg) {
-                if (statusEl) {
-                  statusEl.textContent = "Erro: " + errorMsg;
-                  statusEl.className = "overlay-status error";
-                }
-                console.error(
-                  LOG_PREFIX + " ❌ Erro ao lançar Electron: " + errorMsg,
-                );
-              },
-            );
-          });
-
-          pickerCards.appendChild(card);
-        })(PRESENTERS[_pi]);
-      }
-
-      // Botão para abrir o seletor
-      btnSelect.onclick = function () {
-        console.log(LOG_PREFIX + " 🖥️ Abrindo seletor de apresentador...");
-        // Esconde botões e logo, mostra picker
-        if (overlayButtons) overlayButtons.style.display = "none";
-        if (overlayLogo) overlayLogo.style.display = "none";
-        pickerEl.style.display = "flex";
-      };
-
-      // Botão voltar do picker
-      if (pickerBackBtn) {
-        pickerBackBtn.onclick = function () {
-          pickerEl.style.display = "none";
-          if (statusEl) statusEl.textContent = "";
-          if (overlayButtons) overlayButtons.style.display = "flex";
-          if (overlayLogo) overlayLogo.style.display = "flex";
-        };
-      }
-    }
-
-    // ── Auto-start: se veio com ?autostart=1, entra em fullscreen automaticamente ──
-    // Parser manual de query string (ES5 compatível — sem URLSearchParams)
-    var _search = window.location.search || "";
-    var _hasAutostart = _search.indexOf("autostart=1") !== -1;
-    if (_hasAutostart) {
-      console.log(
-        LOG_PREFIX + " ▶️ Auto-start detectado – entrando em tela cheia",
-      );
-      requestFullscreen();
-      if (typeof SleepPrevention !== "undefined") {
-        SleepPrevention.enable();
-      }
-      overlay.className += " hidden";
-      setTimeout(function () {
-        overlay.style.display = "none";
-      }, 600);
-      setupCursorAutoHide();
-      // Remove o parâmetro da URL para não recarregar em loop
-      if (window.history && window.history.replaceState) {
-        var cleanUrl = window.location.pathname;
-        window.history.replaceState({}, document.title, cleanUrl);
-      }
-      return;
-    }
-
-    console.log(
-      LOG_PREFIX + " 🖱️ Overlay pronto – aguardando escolha do usuário",
-    );
+    console.log(LOG_PREFIX + " ▶️ Tela cheia iniciada automaticamente");
   }
 
   /**

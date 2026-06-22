@@ -5,56 +5,7 @@
   "main": "./public/js/main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "electron . --dev",
-    "server": "node server.js",
-    "build": "electron-builder --win --x64",
-    "build:all": "electron-builder -wml"
-  },
-  "build": {
-    "appId": "com.lummar.propaganda",
-    "productName": "Lummar Propaganda",
-    "copyright": "Lummar Plásticos",
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": true,
-      "allowToChangeInstallationDirectory": true
-    },
-    "files": [
-      "**/*",
-      "!dist/**",
-      "!uploads/**",
-      "!*.md",
-      "!.git/**",
-      "!.gitignore"
-    ],
-    "npmRebuild": false,
-    "asarUnpack": [
-      "**/*.node",
-      "node_modules/better-sqlite3/**"
-    ],
-    "directories": {
-      "output": "dist",
-      "buildResources": "build"
-    },
-    "extraResources": [
-      {
-        "from": "db",
-        "to": "db",
-        "filter": [
-          "**/*"
-        ]
-      }
-    ]
+    "dev": "electron . --dev"
   },
   "keywords": [
     "electron",
@@ -65,11 +16,9 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^28.3.3",
-    "electron-builder": "^24.13.3"
+    "electron": "^28.3.3"
   },
   "dependencies": {
-    "better-sqlite3": "^11.9.1",
     "bindings": "^1.5.0",
     "cors": "^2.8.5",
     "cross": "^1.0.0",
@@ -81,6 +30,7 @@
     "nosleep.js": "^0.12.0",
     "path": "^0.12.7",
     "router": "^2.2.0",
+    "sqlite3": "^5.1.7",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1"
   }

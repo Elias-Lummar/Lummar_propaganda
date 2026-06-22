@@ -8,13 +8,22 @@ const { initDatabase, getDb } = require("./db/database");
 const { setupSwagger } = require("./swagger");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3010;
 
 // Middleware
 app.use(cors());
-app.use(express.json({ limit: "1GB" }));
-app.use(express.urlencoded({ extended: true, limit: "1GB" }));
+app.use(express.json({ limit: "1gb" }));
+app.use(express.urlencoded({ extended: true, limit: "1gb" }));
 app.use(express.static("public"));
+
+// Timeout maior para uploads grandes (10 minutos)
+app.use((req, res, next) => {
+  if (req.url === "/api/upload") {
+    req.setTimeout(10 * 60 * 1000); // 10 min
+    res.setTimeout(10 * 60 * 1000);
+  }
+  next();
+});
 
 // Garantir diretório de uploads
 const uploadsDir = path.join(__dirname, "public", "uploads");
@@ -33,7 +42,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 1 * 1024 * 1024 * 1024 },
+  limits: { fileSize: 1024 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (
       file.mimetype.startsWith("image/") ||
@@ -75,6 +84,23 @@ function getLocalIPAddress() {
     }
   }
   return "127.0.0.1";
+}
+
+// Helper: Lista todos os IPs disponíveis (para debug)
+function getAllIPAddresses() {
+  const os = require("os");
+  const interfaces = os.networkInterfaces();
+  const ips = {};
+
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === "IPv4" && !iface.internal) {
+        if (!ips[name]) ips[name] = [];
+        ips[name].push(iface.address);
+      }
+    }
+  }
+  return ips;
 }
 
 // Pages
@@ -159,39 +185,59 @@ app.post("/api/launch-electron", (req, res) => {
 
 // API - Ads
 app.get("/api/ads", (req, res) => {
-  try {
-    const db = getDb();
-    const rows = db
-      .prepare("SELECT * FROM ads ORDER BY display_order ASC, id DESC")
-      .all();
-    res.json(
-      rows.map((r) => ({ ...r, screens: JSON.parse(r.screens || "[]") })),
-    );
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  const db = getDb();
+  db.all(
+    "SELECT * FROM ads ORDER BY display_order ASC, id DESC",
+    [],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      db.all(
+        "SELECT ad_id, screen, display_order FROM ad_screen_orders",
+        [],
+        (err2, orderRows) => {
+          if (err2) return res.status(500).json({ error: err2.message });
+          const screenOrders = {};
+          if (orderRows) {
+            for (const r of orderRows) {
+              if (!screenOrders[r.ad_id]) screenOrders[r.ad_id] = {};
+              screenOrders[r.ad_id][r.screen] = r.display_order;
+            }
+          }
+          res.json(
+            rows.map((r) => ({
+              ...r,
+              screens: JSON.parse(r.screens || "[]"),
+              screen_orders: screenOrders[r.id] || {},
+            })),
+          );
+        },
+      );
+    },
+  );
 });
 
 app.get("/api/ads/active", (req, res) => {
-  try {
-    const db = getDb();
-    const now = new Date().toISOString();
-    const panel = req.query.panel || "presenter";
+  const db = getDb();
+  const now = new Date().toISOString();
+  const panel = req.query.panel || "presenter";
 
-    const rows = db
-      .prepare(
-        "SELECT * FROM ads WHERE start_time <= ? AND end_time >= ? ORDER BY display_order ASC, id ASC",
-      )
-      .all(now, now);
+  db.all(
+    `SELECT ads.*, COALESCE(aso.display_order, ads.display_order) AS effective_order
+     FROM ads
+     LEFT JOIN ad_screen_orders aso ON aso.ad_id = ads.id AND aso.screen = ?
+     WHERE ads.start_time <= ? AND ads.end_time >= ?
+     ORDER BY effective_order ASC, ads.id ASC`,
+    [panel, now, now],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
 
-    const ads = rows
-      .map((r) => ({ ...r, screens: JSON.parse(r.screens || "[]") }))
-      .filter((r) => r.screens.includes(panel));
+      const ads = rows
+        .map((r) => ({ ...r, screens: JSON.parse(r.screens || "[]") }))
+        .filter((r) => r.screens.includes(panel));
 
-    res.json(ads);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+      res.json(ads);
+    },
+  );
 });
 
 app.post("/api/ads", (req, res) => {
@@ -204,49 +250,108 @@ app.post("/api/ads", (req, res) => {
     transition_duration,
     screens,
   } = req.body;
+
+  console.log("[POST /api/ads] Recebido:", { title, file_path, screens });
+
   if (!Array.isArray(screens) || !screens.length) {
     return res.status(400).json({ error: "Selecione ao menos um painel" });
   }
 
-  try {
-    const db = getDb();
-    const info = db
-      .prepare(
-        "INSERT INTO ads (title, file_path, start_time, end_time, transition_type, transition_duration, screens) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      )
-      .run(
-        title,
-        file_path,
-        start_time,
-        end_time,
-        transition_type,
-        transition_duration,
-        JSON.stringify(screens),
-      );
-    res.json({ id: info.lastInsertRowid });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  if (!file_path) {
+    return res.status(400).json({ error: "Caminho do arquivo não informado" });
   }
+
+  const db = getDb();
+  // Obter o próximo display_order disponível
+  db.get(
+    "SELECT COALESCE(MAX(display_order), 0) + 1 AS next_order FROM ads",
+    [],
+    (err, row) => {
+      if (err) return res.status(500).json({ error: err.message });
+      const nextOrder = row.next_order;
+      db.run(
+        "INSERT INTO ads (title, file_path, start_time, end_time, transition_type, transition_duration, screens, display_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+          title,
+          file_path,
+          start_time,
+          end_time,
+          transition_type,
+          transition_duration,
+          JSON.stringify(screens),
+          nextOrder,
+        ],
+        function (err) {
+          if (err) return res.status(500).json({ error: err.message });
+          const newId = this.lastID;
+          // Inserir ordens por tela em ad_screen_orders
+          let pending = screens.length;
+          if (pending === 0) return res.json({ id: newId });
+          screens.forEach((screen) => {
+            db.get(
+              "SELECT COALESCE(MAX(display_order), 0) + 1 AS next_order FROM ad_screen_orders WHERE screen = ?",
+              [screen],
+              (e2, row2) => {
+                const screenOrder = row2 && !e2 ? row2.next_order : nextOrder;
+                db.run(
+                  "INSERT OR IGNORE INTO ad_screen_orders (ad_id, screen, display_order) VALUES (?, ?, ?)",
+                  [newId, screen, screenOrder],
+                  () => {
+                    pending--;
+                    if (pending === 0) res.json({ id: newId });
+                  },
+                );
+              },
+            );
+          });
+        },
+      );
+    },
+  );
 });
 
 // Reorder ads (drag-and-drop) — must come BEFORE /api/ads/:id
 app.put("/api/ads/reorder", (req, res) => {
-  const { orders } = req.body;
+  const { orders, screen } = req.body;
   if (!Array.isArray(orders)) {
     return res.status(400).json({ error: "orders deve ser um array" });
   }
 
-  try {
-    const db = getDb();
-    const stmt = db.prepare("UPDATE ads SET display_order = ? WHERE id = ?");
-    const updateAll = db.transaction((items) => {
-      for (const o of items) stmt.run(o.order, o.id);
+  const db = getDb();
+  let errors = [];
+
+  db.serialize(() => {
+    db.run("BEGIN TRANSACTION");
+    if (screen) {
+      // Ordem específica por tela
+      const stmt = db.prepare(
+        "INSERT OR REPLACE INTO ad_screen_orders (ad_id, screen, display_order) VALUES (?, ?, ?)",
+      );
+      for (let i = 0; i < orders.length; i++) {
+        stmt.run([orders[i].id, screen, orders[i].order], (err) => {
+          if (err) errors.push(err.message);
+        });
+      }
+      stmt.finalize();
+    } else {
+      // Legado: ordem global
+      const stmt = db.prepare("UPDATE ads SET display_order = ? WHERE id = ?");
+      for (let i = 0; i < orders.length; i++) {
+        stmt.run([orders[i].order, orders[i].id], (err) => {
+          if (err) errors.push(err.message);
+        });
+      }
+      stmt.finalize();
+    }
+    db.run("COMMIT", (err) => {
+      if (err || errors.length > 0) {
+        return res
+          .status(500)
+          .json({ error: errors.join(", ") || err.message });
+      }
+      res.json({ success: true, updated: orders.length });
     });
-    updateAll(orders);
-    res.json({ success: true, updated: orders.length });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  });
 });
 
 app.put("/api/ads/:id", (req, res) => {
@@ -263,293 +368,217 @@ app.put("/api/ads/:id", (req, res) => {
     return res.status(400).json({ error: "Selecione ao menos um painel" });
   }
 
-  try {
-    const db = getDb();
-    db.prepare(
-      "UPDATE ads SET title=?, file_path=?, start_time=?, end_time=?, transition_type=?, transition_duration=?, screens=? WHERE id=?",
-    ).run(
-      title,
-      file_path,
-      start_time,
-      end_time,
-      transition_type,
-      transition_duration,
-      JSON.stringify(screens),
-      req.params.id,
-    );
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  const db = getDb();
+
+  // Buscar telas atuais para detectar adições/remoções
+  db.get(
+    "SELECT screens FROM ads WHERE id = ?",
+    [req.params.id],
+    (err0, oldRow) => {
+      if (err0) return res.status(500).json({ error: err0.message });
+      const oldScreens = oldRow ? JSON.parse(oldRow.screens || "[]") : [];
+      const removedScreens = oldScreens.filter((s) => !screens.includes(s));
+      const addedScreens = screens.filter((s) => !oldScreens.includes(s));
+
+      db.run(
+        "UPDATE ads SET title=?, file_path=?, start_time=?, end_time=?, transition_type=?, transition_duration=?, screens=? WHERE id=?",
+        [
+          title,
+          file_path,
+          start_time,
+          end_time,
+          transition_type,
+          transition_duration,
+          JSON.stringify(screens),
+          req.params.id,
+        ],
+        (err) => {
+          if (err) return res.status(500).json({ error: err.message });
+
+          function removeScreens(cb) {
+            if (!removedScreens.length) return cb();
+            let pending = removedScreens.length;
+            removedScreens.forEach((screen) => {
+              db.run(
+                "DELETE FROM ad_screen_orders WHERE ad_id = ? AND screen = ?",
+                [req.params.id, screen],
+                () => {
+                  if (--pending === 0) cb();
+                },
+              );
+            });
+          }
+
+          function addScreens(cb) {
+            if (!addedScreens.length) return cb();
+            let pending = addedScreens.length;
+            addedScreens.forEach((screen) => {
+              db.get(
+                "SELECT COALESCE(MAX(display_order), 0) + 1 AS next_order FROM ad_screen_orders WHERE screen = ?",
+                [screen],
+                (e2, row2) => {
+                  const order = row2 && !e2 ? row2.next_order : 1;
+                  db.run(
+                    "INSERT OR IGNORE INTO ad_screen_orders (ad_id, screen, display_order) VALUES (?, ?, ?)",
+                    [req.params.id, screen, order],
+                    () => {
+                      if (--pending === 0) cb();
+                    },
+                  );
+                },
+              );
+            });
+          }
+
+          removeScreens(() => addScreens(() => res.json({ success: true })));
+        },
+      );
+    },
+  );
 });
 
 app.delete("/api/ads/:id", (req, res) => {
-  try {
-    const db = getDb();
-    const row = db
-      .prepare("SELECT file_path FROM ads WHERE id=?")
-      .get(req.params.id);
-    if (row?.file_path) {
-      const file = path.join(__dirname, "public", row.file_path);
-      if (fs.existsSync(file)) fs.unlinkSync(file);
+  const db = getDb();
+  const screenToRemove = req.query.screen; // Recebe a tela a ser removida
+
+  db.get(
+    "SELECT file_path, screens FROM ads WHERE id=?",
+    [req.params.id],
+    (err, row) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!row)
+        return res.status(404).json({ error: "Propaganda não encontrada" });
+
+      // Se nenhuma tela foi especificada, exclui completamente
+      if (!screenToRemove) {
+        // Excluir arquivo
+        if (row?.file_path) {
+          const file = path.join(__dirname, "public", row.file_path);
+          if (fs.existsSync(file)) fs.unlinkSync(file);
+        }
+        // Limpar ordens por tela e excluir do banco
+        db.run(
+          "DELETE FROM ad_screen_orders WHERE ad_id = ?",
+          [req.params.id],
+          () => {
+            db.run("DELETE FROM ads WHERE id=?", [req.params.id], () =>
+              res.json({ success: true, deleted: true }),
+            );
+          },
+        );
+      } else {
+        // Remove apenas a tela especificada do array de screens
+        try {
+          let screens = JSON.parse(row.screens || "[]");
+          screens = screens.filter((s) => s !== screenToRemove);
+
+          if (screens.length === 0) {
+            // Se nenhuma tela ficar, exclui a propaganda completamente
+            if (row?.file_path) {
+              const file = path.join(__dirname, "public", row.file_path);
+              if (fs.existsSync(file)) fs.unlinkSync(file);
+            }
+            db.run(
+              "DELETE FROM ad_screen_orders WHERE ad_id = ?",
+              [req.params.id],
+              () => {
+                db.run("DELETE FROM ads WHERE id=?", [req.params.id], () =>
+                  res.json({ success: true, deleted: true }),
+                );
+              },
+            );
+          } else {
+            // Atualiza apenas o array de screens e remove a entrada de ordem da tela removida
+            db.run(
+              "DELETE FROM ad_screen_orders WHERE ad_id = ? AND screen = ?",
+              [req.params.id, screenToRemove],
+              () => {
+                db.run(
+                  "UPDATE ads SET screens = ? WHERE id = ?",
+                  [JSON.stringify(screens), req.params.id],
+                  () =>
+                    res.json({
+                      success: true,
+                      deleted: false,
+                      remainingScreens: screens,
+                    }),
+                );
+              },
+            );
+          }
+        } catch (parseErr) {
+          res
+            .status(500)
+            .json({ error: "Erro ao processar screens: " + parseErr.message });
+        }
+      }
+    },
+  );
+});
+
+app.post(
+  "/api/upload",
+  (req, res, next) => {
+    upload.single("file")(req, res, (err) => {
+      if (err) {
+        if (err instanceof multer.MulterError) {
+          if (err.code === "LIMIT_FILE_SIZE") {
+            return res
+              .status(413)
+              .json({ error: "Arquivo muito grande! Tamanho máximo: 1GB" });
+          }
+          return res
+            .status(400)
+            .json({ error: "Erro no upload: " + err.message });
+        }
+        return res.status(500).json({ error: err.message });
+      }
+      if (!req.file) {
+        return res.status(400).json({ error: "Nenhum arquivo enviado" });
+      }
+      next();
+    });
+  },
+  async (req, res) => {
+    const file_path = "/uploads/" + req.file.filename;
+    let duration = 0;
+
+    if (req.file.mimetype.startsWith("video/")) {
+      duration = await getVideoDuration(
+        path.join(__dirname, "public", file_path),
+      );
     }
-    db.prepare("DELETE FROM ads WHERE id=?").run(req.params.id);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
-app.post("/api/upload", upload.single("file"), async (req, res) => {
-  const file_path = "/uploads/" + req.file.filename;
-  let duration = 0;
-
-  if (req.file.mimetype.startsWith("video/")) {
-    duration = await getVideoDuration(
-      path.join(__dirname, "public", file_path),
-    );
-  }
-
-  res.json({ file_path, video_duration: duration });
-});
-
-// ============================================================================
-// Deploy – Registro de Dispositivos & Envio do Instalador Electron
-// ============================================================================
-
-const registeredDevices = new Map(); // ip → objeto device
-const sseAgents = new Map(); // ip → SSE res (agentes conectados)
-const sseBuildClients = new Set(); // SSE res (admins acompanhando o build)
-
-function broadcastBuild(data) {
-  const msg = `data: ${JSON.stringify(data)}\n\n`;
-  sseBuildClients.forEach((r) => {
-    try {
-      r.write(msg);
-    } catch {}
-  });
-}
-
-function extractClientIP(req) {
-  const raw =
-    req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
-    req.socket?.remoteAddress ||
-    "unknown";
-  return raw.replace("::ffff:", "");
-}
-
-// Página do agente (roda no dispositivo remoto)
-app.get("/agent", (req, res) =>
-  res.sendFile(path.join(__dirname, "public", "deploy-agent.html")),
+    res.json({ file_path, video_duration: duration });
+  },
 );
 
-// Retorna o IP de quem está fazendo a requisição e registra o device
-app.get("/api/client-ip", (req, res) => {
-  const ip = extractClientIP(req);
-  const existing = registeredDevices.get(ip) || {};
-  registeredDevices.set(ip, {
-    ...existing,
-    ip,
-    name: existing.name || `Dispositivo (${ip})`,
-    userAgent: req.headers["user-agent"] || "unknown",
-    lastSeen: new Date().toISOString(),
-    connected: sseAgents.has(ip),
-  });
-  res.json({ ip, registered: true });
-});
-
-// Lista dispositivos registrados
-app.get("/api/deploy/devices", (req, res) => {
-  const list = Array.from(registeredDevices.values()).map((d) => ({
-    ...d,
-    connected: sseAgents.has(d.ip),
-  }));
-  res.json(list);
-});
-
-// Remove dispositivo
-app.delete("/api/deploy/devices/:ip", (req, res) => {
-  registeredDevices.delete(req.params.ip);
-  res.json({ success: true });
-});
-
-// Renomeia dispositivo
-app.patch("/api/deploy/devices/:ip", (req, res) => {
-  const device = registeredDevices.get(req.params.ip);
-  if (!device)
-    return res.status(404).json({ error: "Dispositivo não encontrado" });
-  device.name = req.body.name || device.name;
-  res.json({ success: true });
-});
-
-// SSE – Agente remoto escuta comandos do servidor
-app.get("/api/deploy/listen", (req, res) => {
-  const ip = extractClientIP(req);
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    Connection: "keep-alive",
-    "Access-Control-Allow-Origin": "*",
-  });
-
-  res.write(`data: ${JSON.stringify({ type: "connected", ip })}\n\n`);
-  sseAgents.set(ip, res);
-
-  const existing = registeredDevices.get(ip) || {};
-  registeredDevices.set(ip, {
-    ...existing,
-    ip,
-    name: existing.name || `Dispositivo (${ip})`,
-    userAgent: req.headers["user-agent"] || "unknown",
-    firstSeen: existing.firstSeen || new Date().toISOString(),
-    lastSeen: new Date().toISOString(),
-    connected: true,
-  });
-
-  const hb = setInterval(() => {
-    try {
-      res.write(`data: ${JSON.stringify({ type: "ping" })}\n\n`);
-    } catch {
-      clearInterval(hb);
-    }
-  }, 25000);
-
-  req.on("close", () => {
-    clearInterval(hb);
-    sseAgents.delete(ip);
-    const d = registeredDevices.get(ip);
-    if (d) registeredDevices.set(ip, { ...d, connected: false });
-  });
-});
-
-// SSE – Admin acompanha o log do build em tempo real
-app.get("/api/deploy/build-log", (req, res) => {
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    Connection: "keep-alive",
-  });
-  sseBuildClients.add(res);
-  req.on("close", () => sseBuildClients.delete(res));
-  res.write(`data: ${JSON.stringify({ type: "connected" })}\n\n`);
-});
-
-// Info sobre o instalador disponível
-app.get("/api/deploy/installer-info", (req, res) => {
-  const distDir = path.join(__dirname, "dist");
-  if (!fs.existsSync(distDir)) return res.json({ available: false });
-  const exts = [".exe", ".AppImage", ".dmg", ".deb", ".rpm"];
-  const files = fs
-    .readdirSync(distDir)
-    .filter((f) => exts.some((e) => f.endsWith(e)));
-  if (!files.length) return res.json({ available: false });
-
-  const latest = files
-    .map((f) => {
-      const s = fs.statSync(path.join(distDir, f));
-      return { name: f, size: s.size, builtAt: s.mtime.toISOString() };
-    })
-    .sort((a, b) => new Date(b.builtAt) - new Date(a.builtAt))[0];
-
-  res.json({ available: true, ...latest });
-});
-
-// Serve o instalador compilado para download
-app.get("/api/deploy/installer", (req, res) => {
-  const distDir = path.join(__dirname, "dist");
-  if (!fs.existsSync(distDir))
-    return res
-      .status(404)
-      .json({ error: "Pasta dist não encontrada. Execute o build primeiro." });
-
-  const files = fs.readdirSync(distDir).filter((f) => f.endsWith(".exe"));
-  if (!files.length)
-    return res
-      .status(404)
-      .json({ error: "Nenhum instalador .exe encontrado em /dist." });
-
-  const latest = files
-    .map((f) => ({ name: f, time: fs.statSync(path.join(distDir, f)).mtime }))
-    .sort((a, b) => b.time - a.time)[0];
-
-  res.download(path.join(distDir, latest.name), latest.name);
-});
-
-// Inicia o build via electron-builder
-let buildProc = null;
-app.post("/api/deploy/build", (req, res) => {
-  if (buildProc && !buildProc.killed)
-    return res.json({ success: false, message: "Build já está em andamento." });
-
-  const { spawn } = require("child_process");
-  const cwd = path.resolve(__dirname);
-
-  buildProc = spawn("npx", ["electron-builder", "--win", "--x64"], {
-    cwd,
-    shell: true,
-  });
-
-  res.json({ success: true, message: "Build iniciado." });
-  broadcastBuild({ type: "start" });
-
-  buildProc.stdout?.on("data", (d) =>
-    broadcastBuild({ type: "log", level: "info", text: d.toString() }),
-  );
-  buildProc.stderr?.on("data", (d) =>
-    broadcastBuild({ type: "log", level: "warn", text: d.toString() }),
-  );
-  buildProc.on("exit", (code) => {
-    buildProc = null;
-    broadcastBuild({ type: "done", code, success: code === 0 });
-  });
-  buildProc.on("error", (err) => {
-    buildProc = null;
-    broadcastBuild({ type: "error", message: err.message });
-  });
-});
-
-// Empurra o link do instalador para um IP específico ou para todos os agentes
-app.post("/api/deploy/push", (req, res) => {
-  const { ip, mode } = req.body; // mode: "single" | "all"
-  const localIP = getLocalIPAddress();
-  const url = `http://${localIP}:${PORT}/api/deploy/installer`;
-  const msg = `data: ${JSON.stringify({ type: "install", url, serverIp: localIP })}\n\n`;
-
-  if (mode === "all") {
-    let sent = 0;
-    sseAgents.forEach((client) => {
-      try {
-        client.write(msg);
-        sent++;
-      } catch {}
-    });
-    return res.json({
-      success: true,
-      sent,
-      message: `Enviado para ${sent} dispositivo(s).`,
-    });
-  }
-
-  if (!ip) return res.status(400).json({ error: "Informe o IP." });
-  const client = sseAgents.get(ip);
-  if (!client)
-    return res
-      .status(404)
-      .json({ error: `Dispositivo ${ip} não está conectado como agente.` });
-
-  try {
-    client.write(msg);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // Errors
-app.use((err, req, res, next) => res.status(500).json({ error: err.message }));
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res
+        .status(413)
+        .json({ error: "Arquivo muito grande! Tamanho máximo: 1GB" });
+    }
+    return res.status(400).json({ error: "Erro no upload: " + err.message });
+  }
+  res.status(500).json({ error: err.message });
+});
 
 initDatabase().then(() => {
-  app.listen(PORT, () =>
-    console.log(`Servidor rodando em http://localhost:${PORT}`),
-  );
+  const localIP = getLocalIPAddress();
+  const allIPs = getAllIPAddresses();
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`\n✅ Servidor rodando!`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`LocalHost: http://localhost:${PORT}`);
+    console.log(`Rede Padrão: http://${localIP}:${PORT}`);
+    console.log(`\n📡 Todas as interfaces disponíveis:`);
+    for (const [interfaceName, ips] of Object.entries(allIPs)) {
+      console.log(`  ${interfaceName}: ${ips.join(", ")}`);
+    }
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+  });
 });
