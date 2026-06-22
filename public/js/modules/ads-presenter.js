@@ -576,25 +576,24 @@
 
     clearCurrentMedia();
 
+    // Keep-awake: decide ANTES de criar a mídia, para liberar o decodificador
+    // a tempo em TVs de 1 decodificador. Vídeo segura o painel sozinho ->
+    // pausa o âncora; imagem depende do âncora -> garante tocando.
+    if (typeof KeepAwake !== "undefined") {
+      if (MediaFactory.isVideo(ad.file_path)) {
+        KeepAwake.relax();
+      } else {
+        KeepAwake.engage();
+      }
+    }
+
     // Callbacks para os eventos de mídia
     var callbacks = {
       onLoaded: function () {
         updateDebugInfo();
 
-        var isVideo = MediaFactory.isVideo(ad.file_path);
-
-        // Keep-awake: vídeo segura o painel sozinho (pausa o âncora para
-        // evitar decodificação dupla); imagem depende do vídeo-âncora.
-        if (typeof KeepAwake !== "undefined") {
-          if (isVideo) {
-            KeepAwake.relax();
-          } else {
-            KeepAwake.engage();
-          }
-        }
-
         // Se é imagem, agenda próxima
-        if (!isVideo) {
+        if (!MediaFactory.isVideo(ad.file_path)) {
           var duration =
             (ad.transition_duration || CONFIG.defaultImageDuration) * 1000;
           state.nextTimeout = setTimeout(function () {
